@@ -6,6 +6,8 @@ import CreateGoal from './pages/CreateGoal'
 import Dashboard from './pages/Dashboard'
 import EditGoal from './pages/EditGoal'
 import GoalDetails from './pages/GoalDetails'
+import GroupDetails from './pages/GroupDetails'
+import Groups from './pages/Groups'
 import MyGoals from './pages/MyGoals'
 import NotFound from './pages/NotFound'
 import SignIn from './pages/SignIn'
@@ -32,6 +34,8 @@ function App() {
               {/* :goalId is a URL parameter, read with useParams(). */}
               <Route path="goals/:goalId" element={<GoalDetails />} />
               <Route path="goals/:goalId/edit" element={<EditGoal />} />
+              <Route path="groups" element={<Groups />} />
+              <Route path="groups/:groupId" element={<GroupDetails />} />
             </Route>
 
             <Route path="/signin" element={<SignIn />} />

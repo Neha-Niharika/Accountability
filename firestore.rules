@@ -3,61 +3,188 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // True when the request comes from a signed-in user whose uid matches the path.
+    // ---------------------------------------------------------- Helpers
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Signed in as the user whose uid is in the path.
     function isOwner(userId) {
-      return request.auth != null && request.auth.uid == userId;
+      return signedIn() && request.auth.uid == userId;
     }
 
     function isValidName(name) {
       return name is string && name.size() > 0 && name.size() <= 50;
     }
 
-    function isDateKey(value) {
-      return value is string && value.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    function isText(value, min, max) {
+      return value is string && value.size() >= min && value.size() <= max;
     }
 
-    // A goal must have exactly these fields with valid values.
+    function isDateKey(value) {
+      return value is string
+        && value.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    // Exactly these fields: no more, no less.
+    function hasExactly(data, fields) {
+      return data.keys().hasAll(fields) && data.keys().hasOnly(fields);
+    }
+
+    // An update may change only these fields.
+    function onlyChanged(fields) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return changed.hasOnly(fields);
+    }
+
+    // --------------------------------------------------- Personal goals
+
+    function userGoalPath(userId, goalId) {
+      return /databases/$(database)/documents/users/$(userId)/goals/$(goalId);
+    }
+
+    function isValidProfile(data) {
+      return data.keys().hasOnly(['name', 'email', 'createdAt'])
+        && isValidName(data.name)
+        && data.email == request.auth.token.email
+        && data.createdAt == request.time;
+    }
+
+    function isValidEndDate(goal) {
+      return goal.endDate == null
+        || (isDateKey(goal.endDate) && goal.endDate >= goal.startDate);
+    }
+
     // Category list must match src/utils/constants.js.
     function isValidGoal(goal) {
-      return goal.keys().hasAll(['title', 'description', 'category', 'frequency',
-                                 'startDate', 'endDate', 'status', 'createdAt', 'updatedAt'])
-        && goal.keys().hasOnly(['title', 'description', 'category', 'frequency',
-                                'startDate', 'endDate', 'status', 'createdAt', 'updatedAt'])
-        && goal.title is string && goal.title.size() > 0 && goal.title.size() <= 100
-        && goal.description is string && goal.description.size() <= 500
+      return hasExactly(goal, ['title', 'description', 'category',
+          'frequency', 'startDate', 'endDate', 'status', 'createdAt',
+          'updatedAt'])
+        && isText(goal.title, 1, 100)
+        && isText(goal.description, 0, 500)
         && goal.category in ['Health', 'Fitness', 'Learning', 'Career',
-                             'Finance', 'Mindfulness', 'Personal', 'Other']
+          'Finance', 'Mindfulness', 'Personal', 'Other']
         && goal.frequency in ['daily', 'weekly']
         && isDateKey(goal.startDate)
-        && (goal.endDate == null || (isDateKey(goal.endDate) && goal.endDate >= goal.startDate))
+        && isValidEndDate(goal)
         && goal.status in ['active', 'completed']
         && goal.updatedAt == request.time;
     }
 
-    // Progress can only be logged for an existing, active goal, on a date
-    // between the goal's start and end dates. get() reads the goal document.
+    function isValidProgress(data, date) {
+      return isDateKey(date)
+        && data.keys().hasOnly(['date', 'completedAt'])
+        && data.date == date
+        && data.completedAt == request.time;
+    }
+
+    // Progress only for an existing, active goal, within its dates.
     function canLogProgress(userId, goalId, date) {
-      let goalPath = /databases/$(database)/documents/users/$(userId)/goals/$(goalId);
+      let goalPath = userGoalPath(userId, goalId);
       return exists(goalPath)
         && get(goalPath).data.status == 'active'
         && date >= get(goalPath).data.startDate
-        && (get(goalPath).data.endDate == null || date <= get(goalPath).data.endDate);
+        && (get(goalPath).data.endDate == null
+          || date <= get(goalPath).data.endDate);
     }
+
+    // ----------------------------------------------------------- Groups
+
+    function groupPath(groupId) {
+      return /databases/$(database)/documents/groups/$(groupId);
+    }
+
+    function memberPath(groupId, uid) {
+      return /databases/$(database)/documents/groups/$(groupId)/members/$(uid);
+    }
+
+    function groupGoalPath(groupId, goalId) {
+      return /databases/$(database)/documents/groups/$(groupId)/goals/$(goalId);
+    }
+
+    // The group as it is now, and as it will be after this batch.
+    function groupData(groupId) {
+      return get(groupPath(groupId)).data;
+    }
+
+    function groupDataAfter(groupId) {
+      return getAfter(groupPath(groupId)).data;
+    }
+
+    function isMember(groupId) {
+      return signedIn() && exists(memberPath(groupId, request.auth.uid));
+    }
+
+    function isGroupOwner(groupId) {
+      return signedIn() && groupData(groupId).ownerId == request.auth.uid;
+    }
+
+    // Same alphabet as src/utils/groupCode.js (no 0, O, 1, I or L).
+    function isGroupCode(value) {
+      return value is string
+        && value.matches('^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}$');
+    }
+
+    function isValidGroup(data) {
+      return hasExactly(data, ['name', 'code', 'ownerId', 'ownerName',
+          'createdAt'])
+        && data.ownerId == request.auth.uid
+        && isText(data.name, 1, 60)
+        && isValidName(data.ownerName)
+        && isGroupCode(data.code)
+        && data.createdAt == request.time;
+    }
+
+    // Joining needs the group's code. The owner joins as 'owner',
+    // everyone else as 'member'. getAfter() also sees a group that is
+    // created in the same batch.
+    function isValidMember(data, groupId) {
+      let ownerId = groupDataAfter(groupId).ownerId;
+      return hasExactly(data, ['name', 'role', 'code', 'joinedAt'])
+        && isValidName(data.name)
+        && data.joinedAt == request.time
+        && data.code == groupDataAfter(groupId).code
+        && ((data.role == 'owner' && ownerId == request.auth.uid)
+          || (data.role == 'member' && ownerId != request.auth.uid));
+    }
+
+    function isValidGroupGoal(data) {
+      return hasExactly(data, ['title', 'description', 'frequency',
+          'createdAt'])
+        && isText(data.title, 1, 100)
+        && isText(data.description, 0, 500)
+        && data.frequency in ['daily', 'weekly']
+        && data.createdAt == request.time;
+    }
+
+    // The ID is {goalId}_{date}_{uid}: one check-in per goal, date, person.
+    function isValidCheckin(data, groupId, checkinId) {
+      return hasExactly(data, ['goalId', 'uid', 'name', 'date', 'note',
+          'completedAt'])
+        && data.uid == request.auth.uid
+        && data.goalId is string
+        && isDateKey(data.date)
+        && checkinId == data.goalId + '_' + data.date + '_' + data.uid
+        && isValidName(data.name)
+        && isText(data.note, 0, 140)
+        && data.completedAt == request.time
+        && exists(groupGoalPath(groupId, data.goalId));
+    }
+
+    // ------------------------------------------------------------ Rules
 
     // User profile: users/{uid}
     match /users/{userId} {
       allow read: if isOwner(userId);
 
-      // Created once at sign-up. Only these exact fields are allowed.
+      // Created once at sign-up.
       allow create: if isOwner(userId)
-        && request.resource.data.keys().hasOnly(['name', 'email', 'createdAt'])
-        && isValidName(request.resource.data.name)
-        && request.resource.data.email == request.auth.token.email
-        && request.resource.data.createdAt == request.time;
+        && isValidProfile(request.resource.data);
 
-      // Only the name can change later; email and createdAt are locked.
+      // Only the name can change later.
       allow update: if isOwner(userId)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+        && onlyChanged(['name'])
         && isValidName(request.resource.data.name);
 
       allow delete: if false;
@@ -75,22 +202,108 @@ service cloud.firestore {
           && isValidGoal(request.resource.data)
           && request.resource.data.createdAt == resource.data.createdAt;
 
-        // Daily progress: users/{uid}/goals/{goalId}/progress/{YYYY-MM-DD}
-        // The date is the document ID, so each goal has at most one record per date.
+        // Progress: users/{uid}/goals/{goalId}/progress/{YYYY-MM-DD}
+        // Create only, so the same date can never be saved twice.
         match /progress/{date} {
           allow read, delete: if isOwner(userId);
 
-          // Create only: no updates, so marking the same date twice is rejected.
           allow create: if isOwner(userId)
-            && isDateKey(date)
-            && request.resource.data.keys().hasOnly(['date', 'completedAt'])
-            && request.resource.data.date == date
-            && request.resource.data.completedAt == request.time
+            && isValidProgress(request.resource.data, date)
             && canLogProgress(userId, goalId, date);
 
           allow update: if false;
         }
       }
+
+      // Groups this user is in: users/{uid}/groupMemberships/{groupId}
+      // Only lists "my groups"; access is checked on the group itself.
+      match /groupMemberships/{groupId} {
+        allow read, delete: if isOwner(userId);
+
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasOnly(['joinedAt'])
+          && request.resource.data.joinedAt == request.time;
+
+        allow update: if false;
+      }
+    }
+
+    // Group: groups/{groupId}
+    match /groups/{groupId} {
+      allow read: if isMember(groupId);
+
+      allow create: if signedIn()
+        && isValidGroup(request.resource.data);
+
+      allow update: if false;
+
+      allow delete: if signedIn()
+        && resource.data.ownerId == request.auth.uid;
+
+      // Members: groups/{groupId}/members/{uid}
+      match /members/{memberId} {
+        allow read: if isMember(groupId);
+
+        // You can only add yourself.
+        allow create: if signedIn()
+          && memberId == request.auth.uid
+          && isValidMember(request.resource.data, groupId);
+
+        allow update: if false;
+
+        // Leave yourself, or the owner removes you when deleting the group.
+        allow delete: if signedIn()
+          && (memberId == request.auth.uid || isGroupOwner(groupId));
+      }
+
+      // Shared goals: only the owner adds or deletes them.
+      match /goals/{goalId} {
+        allow read: if isMember(groupId);
+
+        allow create: if isGroupOwner(groupId)
+          && isValidGroupGoal(request.resource.data);
+
+        allow update: if false;
+        allow delete: if isGroupOwner(groupId);
+      }
+
+      // Members' status: groups/{groupId}/checkins/{goalId}_{date}_{uid}
+      match /checkins/{checkinId} {
+        allow read: if isMember(groupId);
+
+        allow create: if isMember(groupId)
+          && isValidCheckin(request.resource.data, groupId, checkinId);
+
+        // Only the author edits, and only the note.
+        allow update: if isMember(groupId)
+          && resource.data.uid == request.auth.uid
+          && onlyChanged(['note'])
+          && isText(request.resource.data.note, 0, 140);
+
+        // Authors undo their own; the owner can clear any.
+        allow delete: if signedIn()
+          && (resource.data.uid == request.auth.uid
+            || isGroupOwner(groupId));
+      }
+    }
+
+    // Join codes: groupCodes/{CODE} holds { groupId }.
+    // You may read one code you already know, but never list them.
+    match /groupCodes/{code} {
+      allow get: if signedIn();
+
+      // Created with its group. Create only, so a code is never taken over.
+      allow create: if signedIn()
+        && isGroupCode(code)
+        && request.resource.data.keys().hasOnly(['groupId'])
+        && groupDataAfter(request.resource.data.groupId).code == code
+        && groupDataAfter(request.resource.data.groupId).ownerId
+          == request.auth.uid;
+
+      allow update: if false;
+
+      allow delete: if signedIn()
+        && groupData(resource.data.groupId).ownerId == request.auth.uid;
     }
 
     // Everything else stays denied.

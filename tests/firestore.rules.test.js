@@ -22,6 +22,8 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
+  writeBatch,
 } from 'firebase/firestore'
 
 let testEnv
@@ -233,5 +235,174 @@ describe('progress', () => {
     await seedGoal('g1')
     await assertFails(getDocs(collection(db('bob'), 'users/alice/goals/g1/progress')))
     await assertFails(setDoc(progressDoc(db('bob'), 'g1', '2026-10-28'), progress('2026-10-28')))
+  })
+})
+
+describe('groups', () => {
+  const CODE = 'K7MP2Q'
+
+  // A group owned by alice, with one shared goal. Rules are off while seeding.
+  async function seedGroup() {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore()
+      await setDoc(doc(firestore, 'groups/grp'), {
+        name: 'Runners',
+        code: CODE,
+        ownerId: 'alice',
+        ownerName: 'Alice',
+        createdAt: serverTimestamp(),
+      })
+      await setDoc(doc(firestore, `groupCodes/${CODE}`), { groupId: 'grp' })
+      await setDoc(doc(firestore, 'groups/grp/members/alice'), {
+        name: 'Alice',
+        role: 'owner',
+        code: CODE,
+        joinedAt: serverTimestamp(),
+      })
+      await setDoc(doc(firestore, 'groups/grp/goals/run'), {
+        title: 'Run 30 minutes',
+        description: '',
+        frequency: 'daily',
+        createdAt: serverTimestamp(),
+      })
+    })
+  }
+
+  function member(code = CODE, role = 'member') {
+    return { name: 'Bob', role, code, joinedAt: serverTimestamp() }
+  }
+
+  async function bobJoins() {
+    await setDoc(doc(db('bob'), 'groups/grp/members/bob'), member())
+  }
+
+  function checkin(uid, date = '2026-10-28', note = '') {
+    return { goalId: 'run', uid, name: uid, date, note, completedAt: serverTimestamp() }
+  }
+
+  test('owner creates a group, its code and their membership in one batch', async () => {
+    const firestore = db('alice')
+    const batch = writeBatch(firestore)
+    batch.set(doc(firestore, 'groups/new'), {
+      name: 'Readers',
+      code: 'ABCD23',
+      ownerId: 'alice',
+      ownerName: 'Alice',
+      createdAt: serverTimestamp(),
+    })
+    batch.set(doc(firestore, 'groupCodes/ABCD23'), { groupId: 'new' })
+    batch.set(doc(firestore, 'groups/new/members/alice'), member('ABCD23', 'owner'))
+    batch.set(doc(firestore, 'users/alice/groupMemberships/new'), { joinedAt: serverTimestamp() })
+    await assertSucceeds(batch.commit())
+  })
+
+  test('cannot create a group for someone else or with a bad code', async () => {
+    const group = { name: 'X', code: 'ABCD23', ownerId: 'bob', ownerName: 'Bob', createdAt: serverTimestamp() }
+    await assertFails(setDoc(doc(db('alice'), 'groups/g2'), group))
+    await assertFails(setDoc(doc(db('alice'), 'groups/g3'), { ...group, ownerId: 'alice', code: 'abc' }))
+  })
+
+  test('a code that is already taken cannot be overwritten', async () => {
+    await seedGroup()
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'groups/bobs'), {
+        name: 'Bob group',
+        code: CODE,
+        ownerId: 'bob',
+        ownerName: 'Bob',
+        createdAt: serverTimestamp(),
+      })
+    })
+    await assertFails(setDoc(doc(db('bob'), `groupCodes/${CODE}`), { groupId: 'bobs' }))
+  })
+
+  test('signed-in users can read one code but not list codes', async () => {
+    await seedGroup()
+    await assertSucceeds(getDoc(doc(db('bob'), `groupCodes/${CODE}`)))
+    await assertFails(getDocs(collection(db('bob'), 'groupCodes')))
+    await assertFails(getDoc(doc(signedOutDb(), `groupCodes/${CODE}`)))
+  })
+
+  test('non-members cannot read the group or its data', async () => {
+    await seedGroup()
+    await assertFails(getDoc(doc(db('bob'), 'groups/grp')))
+    await assertFails(getDocs(collection(db('bob'), 'groups/grp/members')))
+    await assertFails(getDocs(collection(db('bob'), 'groups/grp/goals')))
+    await assertFails(getDocs(collection(db('bob'), 'groups/grp/checkins')))
+  })
+
+  test('joining needs the right code, and only as yourself', async () => {
+    await seedGroup()
+    await assertFails(setDoc(doc(db('bob'), 'groups/grp/members/bob'), member('WRONG2')))
+    await assertFails(setDoc(doc(db('bob'), 'groups/grp/members/bob'), member(CODE, 'owner')))
+    await assertFails(setDoc(doc(db('bob'), 'groups/grp/members/carol'), member()))
+    await assertSucceeds(setDoc(doc(db('bob'), 'groups/grp/members/bob'), member()))
+    await assertSucceeds(getDoc(doc(db('bob'), 'groups/grp')))
+  })
+
+  test('only the owner adds and deletes group goals', async () => {
+    await seedGroup()
+    await bobJoins()
+    const goal = { title: 'Read', description: '', frequency: 'weekly', createdAt: serverTimestamp() }
+    await assertFails(addDoc(collection(db('bob'), 'groups/grp/goals'), goal))
+    await assertFails(deleteDoc(doc(db('bob'), 'groups/grp/goals/run')))
+    await assertSucceeds(addDoc(collection(db('alice'), 'groups/grp/goals'), goal))
+    await assertFails(addDoc(collection(db('alice'), 'groups/grp/goals'), { ...goal, frequency: 'hourly' }))
+  })
+
+  test('members check in as themselves, once per goal and date', async () => {
+    await seedGroup()
+    await bobJoins()
+    const bobDb = db('bob')
+    const mine = doc(bobDb, 'groups/grp/checkins/run_2026-10-28_bob')
+    await assertSucceeds(setDoc(mine, checkin('bob', '2026-10-28', '5k done')))
+    await assertFails(setDoc(mine, checkin('bob', '2026-10-28')))
+    await assertFails(setDoc(doc(bobDb, 'groups/grp/checkins/run_2026-10-28_alice'), checkin('alice')))
+    await assertFails(setDoc(doc(bobDb, 'groups/grp/checkins/x_2026-10-28_bob'), checkin('bob')))
+    await assertFails(
+      setDoc(doc(bobDb, 'groups/grp/checkins/run_2026-10-29_bob'), checkin('bob', '2026-10-29', 'x'.repeat(141))),
+    )
+    // Everyone in the group can see it.
+    await assertSucceeds(getDocs(query(collection(db('alice'), 'groups/grp/checkins'), where('date', '>=', '2026-10-26'))))
+  })
+
+  test('only the author edits the note, and only the note', async () => {
+    await seedGroup()
+    await bobJoins()
+    await setDoc(doc(db('bob'), 'groups/grp/checkins/run_2026-10-28_bob'), checkin('bob'))
+    await assertSucceeds(updateDoc(doc(db('bob'), 'groups/grp/checkins/run_2026-10-28_bob'), { note: 'Felt great' }))
+    await assertFails(updateDoc(doc(db('bob'), 'groups/grp/checkins/run_2026-10-28_bob'), { date: '2026-10-01' }))
+    await assertFails(updateDoc(doc(db('alice'), 'groups/grp/checkins/run_2026-10-28_bob'), { note: 'Edited' }))
+  })
+
+  test('members can leave; the owner can delete the group', async () => {
+    await seedGroup()
+    await bobJoins()
+    await setDoc(doc(db('bob'), 'groups/grp/checkins/run_2026-10-28_bob'), checkin('bob'))
+
+    // Bob can't remove Alice or delete the group.
+    await assertFails(deleteDoc(doc(db('bob'), 'groups/grp/members/alice')))
+    await assertFails(deleteDoc(doc(db('bob'), 'groups/grp')))
+    await assertFails(deleteDoc(doc(db('bob'), `groupCodes/${CODE}`)))
+
+    // Bob leaves: his check-ins, then his membership.
+    await assertSucceeds(deleteDoc(doc(db('bob'), 'groups/grp/checkins/run_2026-10-28_bob')))
+    await assertSucceeds(deleteDoc(doc(db('bob'), 'groups/grp/members/bob')))
+    await assertFails(getDoc(doc(db('bob'), 'groups/grp')))
+
+    // Alice deletes the group: the code, her membership and the group in one batch.
+    const aliceDb = db('alice')
+    await assertSucceeds(deleteDoc(doc(aliceDb, 'groups/grp/goals/run')))
+    const batch = writeBatch(aliceDb)
+    batch.delete(doc(aliceDb, `groupCodes/${CODE}`))
+    batch.delete(doc(aliceDb, 'groups/grp/members/alice'))
+    batch.delete(doc(aliceDb, 'groups/grp'))
+    await assertSucceeds(batch.commit())
+  })
+
+  test('group memberships list is private to its owner', async () => {
+    await assertSucceeds(setDoc(doc(db('bob'), 'users/bob/groupMemberships/grp'), { joinedAt: serverTimestamp() }))
+    await assertFails(getDocs(collection(db('alice'), 'users/bob/groupMemberships')))
+    await assertFails(setDoc(doc(db('alice'), 'users/bob/groupMemberships/x'), { joinedAt: serverTimestamp() }))
   })
 })

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import FormField from '../components/FormField'
 import { useAuth } from '../hooks/useAuth'
 import { getAuthErrorMessage, signUp } from '../services/authService'
@@ -10,6 +10,10 @@ const initialForm = { name: '', email: '', password: '', confirmPassword: '' }
 function SignUp() {
   const { user, refreshUser } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  // Where to go after sign-up: the page saved by ProtectedRoute (e.g. an invite link), or the dashboard.
+  const from = location.state?.from
+  const redirectTo = from ? `${from.pathname}${from.search ?? ''}` : '/'
 
   // Controlled form: React state is the single source of truth for every input.
   const [form, setForm] = useState(initialForm)
@@ -20,7 +24,7 @@ function SignUp() {
   // Already signed in? Skip this page. (Not while submitting, so the
   // form can finish saving the profile, and not when there is an error to show.)
   if (user && !submitting && !serverError) {
-    return <Navigate to="/" replace />
+    return <Navigate to={redirectTo} replace />
   }
 
   function handleChange(event) {
@@ -40,7 +44,7 @@ function SignUp() {
     try {
       await signUp(form)
       refreshUser()
-      navigate('/', { replace: true })
+      navigate(redirectTo, { replace: true })
     } catch (error) {
       // The account may exist even if a later step failed, so refresh the user too.
       refreshUser()
@@ -58,7 +62,7 @@ function SignUp() {
         {serverError && <p className="status status-error">{serverError}</p>}
         {serverError && user && (
           <p className="auth-switch">
-            <Link to="/">Continue to dashboard</Link>
+            <Link to={redirectTo}>Continue</Link>
           </p>
         )}
 
@@ -106,7 +110,9 @@ function SignUp() {
         </form>
 
         <p className="auth-switch">
-          Already have an account? <Link to="/signin">Sign in</Link>
+          Already have an account? <Link to="/signin" state={location.state}>
+            Sign in
+          </Link>
         </p>
       </div>
     </main>

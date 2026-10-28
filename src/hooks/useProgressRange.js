@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import { getFirestoreErrorMessage } from '../services/goalService'
-import { getProgressDatesSince } from '../services/progressService'
+import { getProgressDatesBetween } from '../services/progressService'
 
-// Loads this week's progress for several goals at once.
+// Loads progress from `fromKey` to `toKey` (inclusive) for several goals at once.
 // Returns a Map of goalId → Set of done date keys.
 // Usage: const { doneDatesByGoal, updateDoneDates, loading, error } =
-//          useWeekProgress(user.uid, goalIds, weekStartKey)
-export function useWeekProgress(uid, goalIds, weekStartKey) {
+//          useProgressRange(user.uid, goalIds, fromKey, toKey)
+export function useProgressRange(uid, goalIds, fromKey, toKey) {
   // Arrays are new objects on every render, so we depend on a string instead.
   const idsKey = goalIds.join(',')
-  const requestKey = `${uid}|${idsKey}|${weekStartKey}`
+  const requestKey = `${uid}|${idsKey}|${fromKey}|${toKey}`
 
   // `key` records which request the data belongs to. While it doesn't match
   // the current request, we are loading.
@@ -23,7 +23,7 @@ export function useWeekProgress(uid, goalIds, weekStartKey) {
       try {
         // Promise.all runs the queries in parallel and waits for all of them.
         const datesPerGoal = await Promise.all(
-          ids.map((goalId) => getProgressDatesSince(uid, goalId, weekStartKey)),
+          ids.map((goalId) => getProgressDatesBetween(uid, goalId, fromKey, toKey)),
         )
         const doneDatesByGoal = new Map(ids.map((goalId, index) => [goalId, new Set(datesPerGoal[index])]))
         if (!ignore) setResult({ key: requestKey, doneDatesByGoal, error: '' })
@@ -38,7 +38,7 @@ export function useWeekProgress(uid, goalIds, weekStartKey) {
     return () => {
       ignore = true
     }
-  }, [uid, idsKey, weekStartKey, requestKey])
+  }, [uid, idsKey, fromKey, toKey, requestKey])
 
   // Update one goal's dates after a mark/undo, without reloading everything.
   function updateDoneDates(goalId, update) {

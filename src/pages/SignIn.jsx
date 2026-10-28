@@ -10,7 +10,9 @@ function SignIn() {
   const navigate = useNavigate()
   const location = useLocation()
   // ProtectedRoute stores the page the user tried to open; default to the dashboard.
-  const redirectTo = location.state?.from?.pathname ?? '/'
+  // Keep its ?query too, so an invite link (/groups?join=CODE) survives signing in.
+  const from = location.state?.from
+  const redirectTo = from ? `${from.pathname}${from.search ?? ''}` : '/'
 
   const [form, setForm] = useState({ email: '', password: '' })
   const [errors, setErrors] = useState({})
@@ -82,7 +84,10 @@ function SignIn() {
         </form>
 
         <p className="auth-switch">
-          New here? <Link to="/signup">Create an account</Link>
+          New here? {/* Pass the saved destination along, so sign-up returns there too. */}
+          <Link to="/signup" state={location.state}>
+            Create an account
+          </Link>
         </p>
       </div>
     </main>

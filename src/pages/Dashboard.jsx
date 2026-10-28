@@ -1,6 +1,6 @@
 // Rendered inside ProtectedRoute, so `user` is always set here.
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import EmptyState from '../components/EmptyState'
 import {
   CalendarIcon,
@@ -14,17 +14,23 @@ import {
   UserIcon,
 } from '../components/Icons'
 import LoadError from '../components/LoadError'
+import MonthView from '../components/MonthView'
 import TodayGoalItem from '../components/TodayGoalItem'
+import WeekView from '../components/WeekView'
 import { useAuth } from '../hooks/useAuth'
 import { useGoals } from '../hooks/useGoals'
 import { useToday } from '../hooks/useToday'
-import { useWeekProgress } from '../hooks/useWeekProgress'
+import { useProgressRange } from '../hooks/useProgressRange'
 import { getFirestoreErrorMessage } from '../services/goalService'
 import { markGoalDone, undoGoalDone } from '../services/progressService'
 import { startOfWeek, toDateKey } from '../utils/dates'
+import { initialsOf } from '../utils/names'
 import { completionPercent, isDoneForPeriod, isGoalDueOn } from '../utils/progress'
 
 const ALL = 'All'
+
+// Dashboard tabs. The choice lives in the URL (?view=week) so a refresh keeps it.
+const VIEWS = { today: 'Today', week: 'Week', month: 'Month' }
 
 const todayFormatter = new Intl.DateTimeFormat(undefined, {
   weekday: 'long',
@@ -38,16 +44,6 @@ function greetingFor(hour) {
   return 'Good evening'
 }
 
-// "Ada Lovelace" → "AL", "Ada" → "A"
-function initialsOf(name) {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0].toUpperCase())
-    .join('')
-}
-
 function Dashboard() {
   const { user } = useAuth()
   const today = useToday()
@@ -56,6 +52,14 @@ function Dashboard() {
   // Read the clock once when the page mounts, not on every re-render.
   const [hour] = useState(() => new Date().getHours())
 
+  const [searchParams, setSearchParams] = useSearchParams()
+  const viewParam = searchParams.get('view')
+  const view = Object.hasOwn(VIEWS, viewParam ?? '') ? viewParam : 'today'
+
+  function setView(value) {
+    setSearchParams(value === 'today' ? {} : { view: value })
+  }
+
   const { goals, loading: goalsLoading, error: goalsError } = useGoals(user.uid)
   const todaysGoals = goals.filter((goal) => isGoalDueOn(goal, todayKey))
   const {
@@ -63,10 +67,11 @@ function Dashboard() {
     updateDoneDates,
     loading: progressLoading,
     error: progressError,
-  } = useWeekProgress(
+  } = useProgressRange(
     user.uid,
     todaysGoals.map((goal) => goal.id),
     weekStartKey,
+    todayKey,
   )
 
   const [selectedCategory, setSelectedCategory] = useState(ALL)
@@ -116,7 +121,6 @@ function Dashboard() {
   const completedGoals = goalsInCategory.filter(isDone)
 
   const loading = goalsLoading || progressLoading
-  const error = goalsError || progressError
   const name = user.displayName || 'there'
 
   function renderItem(goal) {
@@ -177,12 +181,26 @@ function Dashboard() {
         </div>
       </header>
 
-      {actionError && <p className="status status-error page-status">{actionError}</p>}
+      <div className="segmented" role="group" aria-label="Dashboard view">
+        {Object.entries(VIEWS).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            className="segmented-option"
+            aria-pressed={view === value}
+            onClick={() => setView(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-      {loading ? (
+      {view === 'today' && actionError && <p className="status status-error page-status">{actionError}</p>}
+
+      {goalsLoading ? (
         <p className="page-loading">Loading your goals…</p>
-      ) : error ? (
-        <LoadError message={error} />
+      ) : goalsError ? (
+        <LoadError message={goalsError} />
       ) : goals.length === 0 ? (
         <EmptyState
           title="No goals yet"
@@ -193,6 +211,14 @@ function Dashboard() {
             </Link>
           }
         />
+      ) : view === 'week' ? (
+        <WeekView uid={user.uid} goals={goals} today={today} />
+      ) : view === 'month' ? (
+        <MonthView uid={user.uid} goals={goals} today={today} />
+      ) : progressLoading ? (
+        <p className="page-loading">Loading today’s progress…</p>
+      ) : progressError ? (
+        <LoadError message={progressError} />
       ) : todaysGoals.length === 0 ? (
         <EmptyState
           title="Nothing scheduled for today"

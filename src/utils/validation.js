@@ -2,6 +2,7 @@
 // { fieldName: 'error message' }. An empty object means the form is valid.
 import { FREQUENCY_LABELS, GOAL_CATEGORIES, STATUS_LABELS } from './constants'
 import { DATE_KEY_PATTERN } from './dates'
+import { GROUP_CODE_PATTERN } from './groupCode'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -9,6 +10,8 @@ export const MIN_PASSWORD_LENGTH = 8
 export const MAX_NAME_LENGTH = 50
 export const MAX_GOAL_TITLE_LENGTH = 100
 export const MAX_GOAL_DESCRIPTION_LENGTH = 500
+export const MAX_GROUP_NAME_LENGTH = 60
+export const MAX_NOTE_LENGTH = 140
 
 export function validateSignUp({ name, email, password, confirmPassword }) {
   const errors = {}
@@ -92,5 +95,41 @@ export function validateGoal({ title, description, category, frequency, startDat
     errors.status = 'Choose a status.'
   }
 
+  return errors
+}
+
+export function validateGroupName({ name }) {
+  const errors = {}
+  if (!name.trim()) {
+    errors.name = 'Group name is required.'
+  } else if (name.trim().length > MAX_GROUP_NAME_LENGTH) {
+    errors.name = `Group name must be ${MAX_GROUP_NAME_LENGTH} characters or fewer.`
+  }
+  return errors
+}
+
+export function validateJoinCode({ code }) {
+  const errors = {}
+  if (!code) {
+    errors.code = 'Enter the 6-character code.'
+  } else if (!GROUP_CODE_PATTERN.test(code)) {
+    errors.code = 'Codes are 6 letters and numbers, like K7MP2Q.'
+  }
+  return errors
+}
+
+export function validateGroupGoal({ title, description, frequency }) {
+  const errors = {}
+  if (!title.trim()) {
+    errors.title = 'Goal title is required.'
+  } else if (title.trim().length > MAX_GOAL_TITLE_LENGTH) {
+    errors.title = `Goal title must be ${MAX_GOAL_TITLE_LENGTH} characters or fewer.`
+  }
+  if (description.trim().length > MAX_GOAL_DESCRIPTION_LENGTH) {
+    errors.description = `Description must be ${MAX_GOAL_DESCRIPTION_LENGTH} characters or fewer.`
+  }
+  if (!Object.hasOwn(FREQUENCY_LABELS, frequency)) {
+    errors.frequency = 'Choose how often.'
+  }
   return errors
 }

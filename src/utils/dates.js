@@ -11,10 +11,39 @@ export function toDateKey(date) {
   return `${year}-${month}-${day}`
 }
 
+// '2026-10-28' → Date at local midnight.
+export function parseDateKey(dateKey) {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
+// Adding to the day number (not milliseconds) stays correct across daylight-saving changes.
+export function addDays(date, days) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days)
+}
+
 // Monday of the week containing `date`.
 export function startOfWeek(date) {
   const daysSinceMonday = (date.getDay() + 6) % 7
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate() - daysSinceMonday)
+  return addDays(date, -daysSinceMonday)
+}
+
+export function startOfMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1)
+}
+
+// Day 0 of next month is the last day of this month.
+export function endOfMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0)
+}
+
+// Every date key from `fromKey` to `toKey`, inclusive.
+export function dateKeysBetween(fromKey, toKey) {
+  const keys = []
+  for (let date = parseDateKey(fromKey); toDateKey(date) <= toKey; date = addDays(date, 1)) {
+    keys.push(toDateKey(date))
+  }
+  return keys
 }
 
 const dateKeyFormatter = new Intl.DateTimeFormat(undefined, {
@@ -26,6 +55,5 @@ const dateKeyFormatter = new Intl.DateTimeFormat(undefined, {
 // '2026-10-28' → '28 Oct 2026' (in the user's locale).
 export function formatDateKey(dateKey) {
   if (!dateKey) return '—'
-  const [year, month, day] = dateKey.split('-').map(Number)
-  return dateKeyFormatter.format(new Date(year, month - 1, day))
+  return dateKeyFormatter.format(parseDateKey(dateKey))
 }

@@ -1,20 +1,17 @@
 // Floating bottom navigation: Home, Goals, a raised "+" button for a new goal,
-// Completed goals, and Sign out. Each item is a 48px touch target.
+// Groups, and Sign out. Each item is a 48px touch target.
 import { useState } from 'react'
-import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { signOut } from '../services/authService'
-import { HomeIcon, ListIcon, LogOutIcon, PlusIcon, TrophyIcon } from './Icons'
+import { HomeIcon, ListIcon, LogOutIcon, PlusIcon, UsersIcon } from './Icons'
 
 function Navbar() {
   const location = useLocation()
-  const [searchParams] = useSearchParams()
   const [error, setError] = useState('')
 
-  // Work out which item is active. "Goals" and "Done" share the /goals page,
-  // so we also look at the ?status= filter in the URL.
-  const onGoalsPage = location.pathname === '/goals'
-  const showingCompleted = onGoalsPage && searchParams.get('status') === 'completed'
-  const goalsActive = location.pathname.startsWith('/goals') && location.pathname !== '/goals/new' && !showingCompleted
+  // Work out which item is active. /goals/new belongs to the "+" button.
+  const goalsActive = location.pathname.startsWith('/goals') && location.pathname !== '/goals/new'
+  const groupsActive = location.pathname.startsWith('/groups')
 
   async function handleSignOut() {
     setError('')
@@ -50,8 +47,8 @@ function Navbar() {
         <Link to="/goals/new" className="nav-fab" aria-label="New goal">
           <PlusIcon />
         </Link>
-        <Link to="/goals?status=completed" {...itemProps(showingCompleted)} aria-label="Completed goals">
-          <TrophyIcon />
+        <Link to="/groups" {...itemProps(groupsActive)} aria-label="Groups">
+          <UsersIcon />
         </Link>
         <button type="button" className="nav-item" onClick={handleSignOut} aria-label="Sign out">
           <LogOutIcon />

@@ -43,9 +43,16 @@ export async function getProgressDates(uid, goalId) {
   return snapshot.docs.map((progressDoc) => progressDoc.id)
 }
 
-// Date keys on or after `fromDateKey` (used for "this week" on the dashboard).
-export async function getProgressDatesSince(uid, goalId, fromDateKey) {
-  const snapshot = await getDocs(query(progressCollection(uid, goalId), where('date', '>=', fromDateKey)))
+// Date keys from `fromDateKey` to `toDateKey`, inclusive (used by the dashboard views).
+// Both filters are on the same field, so no extra Firestore index is needed.
+export async function getProgressDatesBetween(uid, goalId, fromDateKey, toDateKey) {
+  const snapshot = await getDocs(
+    query(
+      progressCollection(uid, goalId),
+      where('date', '>=', fromDateKey),
+      where('date', '<=', toDateKey),
+    ),
+  )
   return snapshot.docs.map((progressDoc) => progressDoc.id)
 }
 
