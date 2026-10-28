@@ -1,0 +1,1238 @@
+/* ==========================================================================
+   Design tokens: change these to restyle the whole app.
+   Palette: Charcoal, Gray-Green (sage), Vibrant Red, Off-White, White.
+   Red is used ONLY for actions and critical alerts.
+   ========================================================================== */
+:root {
+  --charcoal: #171e19;
+  --sage: #b7c6c2;
+  --red: #ca0013;
+  --red-hover: #a50010;
+  --cream: #eeebe3;
+  --white: #ffffff;
+
+  /* #b7c6c2 is too light for small text on white, so text uses a darker sage. */
+  --sage-text: #56655f;
+  --sage-20: rgba(183, 198, 194, 0.2);
+  --sage-30: rgba(183, 198, 194, 0.3);
+  --sage-60: rgba(183, 198, 194, 0.6);
+  --red-10: rgba(202, 0, 19, 0.1);
+
+  --radius-card: 40px; /* main cards */
+  --radius-item: 24px; /* nested items */
+  --radius-small: 16px;
+  --radius-pill: 999px;
+
+  --shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.08);
+  --shadow-red: 0 10px 24px -6px rgba(202, 0, 19, 0.3);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --nav-height: 64px;
+
+  font-family: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  line-height: 1.5;
+  color: var(--charcoal);
+  background: var(--cream);
+  -webkit-font-smoothing: antialiased;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--cream);
+  -webkit-tap-highlight-color: transparent;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0 0 var(--space-2);
+  line-height: 1.15;
+  font-weight: 900;
+  color: var(--charcoal);
+}
+
+h1 {
+  font-size: 32px;
+}
+
+h2 {
+  font-size: 20px;
+}
+
+h3 {
+  font-size: 18px;
+}
+
+p {
+  margin: 0 0 var(--space-4);
+}
+
+a {
+  color: var(--charcoal);
+  font-weight: 700;
+}
+
+button {
+  font-family: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid var(--charcoal);
+  outline-offset: 2px;
+}
+
+.muted {
+  color: var(--sage-text);
+}
+
+/* Small uppercase label: 10px, bold, wide letter spacing. */
+.label {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sage-text);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   Layout: mobile-first single column, with room at the bottom for the nav.
+   ========================================================================== */
+.container {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: max(56px, calc(env(safe-area-inset-top) + 24px)) 20px
+    calc(var(--nav-height) + 72px + env(safe-area-inset-bottom));
+}
+
+/* Fade each page in when the route changes. */
+.page-transition {
+  animation: page-fade 0.25s ease-in-out;
+}
+
+@keyframes page-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-transition {
+    animation: none;
+  }
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+}
+
+.page-header h1 {
+  margin: 0;
+}
+
+.page-status {
+  margin-bottom: var(--space-4);
+}
+
+.page-loading {
+  text-align: center;
+  padding: var(--space-6);
+  color: var(--sage-text);
+  font-weight: 700;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.section-title {
+  margin: var(--space-6) 0 var(--space-3);
+}
+
+/* ==========================================================================
+   Cards
+   ========================================================================== */
+.card {
+  background: var(--white);
+  border: 1px solid var(--sage-20);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+  padding: var(--space-5);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px var(--space-5);
+}
+
+/* Hero card: the big white card at the top of the dashboard and goal details. */
+.hero-card {
+  position: relative;
+  overflow: hidden;
+  background: var(--white);
+  border: 1px solid var(--sage-20);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+  padding: var(--space-5);
+}
+
+.hero-blob {
+  position: absolute;
+  top: -70px;
+  right: -70px;
+  width: 210px;
+  height: 210px;
+  border-radius: 50%;
+  background: var(--sage-20);
+  pointer-events: none;
+}
+
+.hero-heading {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.hero-heading h1,
+.hero-heading h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.hero-heading > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.hero-icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: var(--white);
+  border: 1px solid var(--sage-30);
+  box-shadow: var(--shadow);
+  color: var(--charcoal);
+}
+
+/* Bento metric cards inside the hero card. */
+.bento-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+}
+
+.bento {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: var(--space-3);
+  border-radius: var(--radius-small);
+  border: 1px solid var(--sage-30);
+  background: rgba(255, 255, 255, 0.8);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.bento-icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--red-10);
+  color: var(--red);
+}
+
+.bento-value {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.progress-bar {
+  position: relative;
+  height: 10px;
+  margin-top: var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--sage-30);
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--charcoal);
+  transition: width 0.25s ease-in-out;
+}
+
+.info-box {
+  position: relative;
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-small);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--sage-20);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.info-box svg {
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Dashboard header and category selector
+   ========================================================================== */
+.greeting-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.greeting-name {
+  margin: var(--space-1) 0;
+  font-size: 30px;
+  overflow-wrap: anywhere;
+}
+
+/* Spec: the greeting label is 12px, slightly larger than other labels. */
+.greeting-header .label {
+  font-size: 12px;
+}
+
+.greeting-header .muted {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.avatar {
+  position: relative;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid var(--white);
+  background: var(--sage);
+  box-shadow: var(--shadow);
+  font-weight: 900;
+  font-size: 16px;
+}
+
+.avatar-badge {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--cream);
+  background: var(--red);
+  color: var(--white);
+  font-size: 9px;
+  font-weight: 900;
+}
+
+/* Horizontal snap-scrolling selector. Bleeds to the screen edges on mobile. */
+.selector {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 -20px var(--space-5);
+  padding: var(--space-1) 20px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.selector::-webkit-scrollbar {
+  display: none;
+}
+
+.selector-item {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-small);
+  border: 1px solid var(--sage-30);
+  background: var(--white);
+  color: var(--charcoal);
+  cursor: pointer;
+  scroll-snap-align: start;
+  transition: width 0.25s ease-in-out, background 0.25s ease-in-out;
+}
+
+.selector-item-active {
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 160px;
+  padding: var(--space-2);
+  border-radius: var(--radius-pill);
+  border-color: var(--charcoal);
+  background: var(--charcoal);
+  text-align: left;
+}
+
+.selector-value {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--red);
+  color: var(--white);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.selector-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  color: var(--white);
+}
+
+.selector-name {
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selector-status {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--sage);
+}
+
+/* ==========================================================================
+   Feed items: goal rows on the dashboard and goal cards on My Goals
+   ========================================================================== */
+.feed-section {
+  margin-top: var(--space-2);
+}
+
+.feed-list,
+.goal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.feed-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: var(--space-3);
+  border-radius: var(--radius-item);
+  border: 1px solid var(--sage-30);
+  background: var(--white);
+}
+
+.feed-item-done .feed-item-title {
+  color: var(--sage-text);
+}
+
+.icon-box {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-small);
+  background: var(--sage-30);
+  color: var(--charcoal);
+}
+
+.feed-item-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.feed-item-title {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--charcoal);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.feed-item-meta {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sage-text);
+}
+
+/* Round check button. Turns red on hover, because it is an action. */
+.check-button {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--sage);
+  background: var(--white);
+  color: var(--white);
+  cursor: pointer;
+  transition: background 0.2s ease-in-out, border-color 0.2s ease-in-out;
+}
+
+.check-button-checked {
+  border-color: var(--charcoal);
+  background: var(--charcoal);
+}
+
+.check-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* A bigger invisible hit area makes the 40px circle easier to tap. */
+.check-button {
+  position: relative;
+}
+
+.check-button::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+
+.goal-card {
+  align-items: flex-start;
+}
+
+.goal-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.goal-card-description,
+.goal-description {
+  margin: var(--space-1) 0;
+  font-size: 14px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.goal-description {
+  position: relative;
+  margin-bottom: var(--space-4);
+  font-size: 15px;
+}
+
+/* Status badge */
+.badge {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.badge-active {
+  background: var(--sage-30);
+  color: var(--charcoal);
+}
+
+.badge-completed {
+  background: var(--charcoal);
+  color: var(--white);
+}
+
+/* Filter pills on My Goals */
+.filter-tabs {
+  display: flex;
+  gap: var(--space-2);
+  margin: 0 -20px var(--space-4);
+  padding: 0 20px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.filter-tab {
+  flex: none;
+  min-height: 40px;
+  padding: var(--space-2) 18px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--sage-30);
+  background: var(--white);
+  color: var(--charcoal);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.filter-tab[aria-pressed='true'] {
+  border-color: var(--charcoal);
+  background: var(--charcoal);
+  color: var(--white);
+}
+
+/* Goal details */
+.details-list {
+  position: relative;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 10px var(--space-5);
+  margin: 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-item);
+  background: var(--sage-20);
+}
+
+.details-list dt {
+  align-self: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sage-text);
+}
+
+.details-list dd {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.progress-card {
+  margin-top: var(--space-5);
+}
+
+.progress-form {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-2);
+}
+
+.progress-form .form-field {
+  flex: 1;
+  min-width: 180px;
+  margin-bottom: 0;
+}
+
+.progress-history-title {
+  margin-top: var(--space-5);
+}
+
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.history-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 52px;
+  border-bottom: 1px solid var(--sage-30);
+  font-weight: 700;
+}
+
+.history-list li:last-child {
+  border-bottom: none;
+}
+
+/* ==========================================================================
+   Buttons: primary actions in red, secondary in white with sage borders.
+   ========================================================================== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: var(--space-3) 22px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.2s ease-in-out, border-color 0.2s ease-in-out;
+}
+
+.btn-primary {
+  background: var(--red);
+  color: var(--white);
+  box-shadow: var(--shadow-red);
+}
+
+.btn-secondary {
+  background: var(--white);
+  border-color: var(--sage-60);
+  color: var(--charcoal);
+}
+
+.btn-danger {
+  background: var(--white);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.btn-small {
+  min-height: 36px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Hover only on devices with a real pointer, so taps don't leave a "stuck" hover. */
+@media (hover: hover) {
+  .btn-primary:hover:not(:disabled) {
+    background: var(--red-hover);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    border-color: var(--charcoal);
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background: var(--red-10);
+  }
+
+  .check-button:hover:not(:disabled) {
+    border-color: var(--red);
+    background: var(--red);
+  }
+
+  .feed-item-title:hover,
+  .back-link:hover {
+    color: var(--red);
+  }
+
+  .filter-tab:hover,
+  .selector-item:not(.selector-item-active):hover {
+    border-color: var(--charcoal);
+  }
+}
+
+/* ==========================================================================
+   Forms
+   ========================================================================== */
+.goal-form > .status {
+  margin-bottom: var(--space-4);
+}
+
+.form-field {
+  margin-bottom: var(--space-4);
+}
+
+.form-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sage-text);
+}
+
+.form-field input,
+.form-field select,
+.form-field textarea {
+  width: 100%;
+  min-height: 48px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--sage-60);
+  border-radius: var(--radius-small);
+  background: var(--white);
+  color: var(--charcoal);
+  /* 16px stops iPhones from zooming in when an input is focused. */
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.form-field textarea {
+  resize: vertical;
+}
+
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+  outline: none;
+  border-color: var(--charcoal);
+  box-shadow: 0 0 0 3px var(--sage-30);
+}
+
+.form-field [aria-invalid='true'] {
+  border-color: var(--red);
+}
+
+.field-error {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--red);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.form-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: var(--space-5);
+}
+
+.form-actions .btn {
+  flex: 1;
+}
+
+.char-count {
+  margin: calc(-1 * var(--space-3)) 0 var(--space-4);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+}
+
+/* ==========================================================================
+   Messages
+   ========================================================================== */
+.status {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-small);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.status-success {
+  background: var(--sage-30);
+  color: var(--charcoal);
+}
+
+.status-error {
+  background: var(--red-10);
+  color: var(--red);
+}
+
+.status-info {
+  background: var(--sage-20);
+  color: var(--charcoal);
+}
+
+.load-error {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.offline-banner {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  margin: 0;
+  padding: calc(env(safe-area-inset-top) + 10px) var(--space-4) 10px;
+  background: var(--red);
+  color: var(--white);
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+}
+
+/* ==========================================================================
+   Auth pages (sign in, sign up, not found, error)
+   ========================================================================== */
+.auth-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 440px;
+}
+
+.auth-card h1 {
+  margin-bottom: var(--space-1);
+}
+
+.auth-card > .status {
+  margin-bottom: var(--space-4);
+}
+
+.auth-card form {
+  margin-top: var(--space-4);
+}
+
+.auth-switch {
+  margin: var(--space-5) 0 0;
+  text-align: center;
+  color: var(--sage-text);
+  font-weight: 600;
+}
+
+.auth-switch a {
+  color: var(--red);
+  font-weight: 800;
+}
+
+/* ==========================================================================
+   Floating bottom navigation
+   ========================================================================== */
+.bottom-nav {
+  position: fixed;
+  left: 50%;
+  bottom: calc(8px + env(safe-area-inset-bottom));
+  z-index: 20;
+  transform: translateX(-50%);
+  width: calc(100% - 16px);
+  max-width: 480px;
+  height: var(--nav-height);
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: center;
+  justify-items: center;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--charcoal);
+  box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.35);
+}
+
+.nav-item {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sage);
+  cursor: pointer;
+  transition: color 0.2s ease-in-out, background 0.2s ease-in-out;
+}
+
+.nav-item-active {
+  color: var(--white);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* The red "+" button floats half above the bar. The cream border makes a cut-out. */
+.nav-fab {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 4px solid var(--cream);
+  background: var(--red);
+  color: var(--white);
+  box-shadow: var(--shadow-red);
+  transform: translateY(-32px);
+  transition: background 0.2s ease-in-out;
+}
+
+@media (hover: hover) {
+  .nav-item:hover {
+    color: var(--white);
+  }
+
+  .nav-fab:hover {
+    background: var(--red-hover);
+  }
+}
+
+.nav-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--nav-height) + 24px + env(safe-area-inset-bottom));
+  z-index: 25;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: 448px;
+  box-shadow: var(--shadow);
+}
+
+/* ==========================================================================
+   Larger screens
+   ========================================================================== */
+@media (min-width: 560px) {
+  .form-row {
+    grid-template-columns: 1fr 1fr;
+    column-gap: var(--space-3);
+  }
+
+  .form-actions {
+    justify-content: flex-end;
+  }
+
+  .form-actions .btn {
+    flex: none;
+  }
+
+  .card,
+  .hero-card {
+    padding: var(--space-6);
+  }
+
+  .bento-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .bento {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (min-width: 768px) {
+  .container {
+    max-width: 720px;
+  }
+
+  .selector,
+  .filter-tabs {
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+/* Very small phones */
+@media (max-width: 360px) {
+  h1 {
+    font-size: 28px;
+  }
+
+  .greeting-name {
+    font-size: 26px;
+  }
+
+  .icon-box {
+    width: 48px;
+    height: 48px;
+  }
+
+  .details-list {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .details-list dd {
+    margin-bottom: var(--space-2);
+  }
+}
+
+/* History row: check icon next to the date */
+.history-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.history-date svg {
+  color: var(--charcoal);
+}
+
+/* ==========================================================================
+   Responsive layouts
+   Phones (default): one column, floating bottom nav.
+   ≥768px tablets: goal cards in two columns.
+   ≥1024px desktops: two-column dashboard and goal details, wider page.
+   ≥1440px large screens: a little more room.
+   ========================================================================== */
+@media (min-width: 768px) {
+  .goal-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .auth-card {
+    max-width: 480px;
+    padding: 40px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container {
+    max-width: 1120px;
+    padding-left: 40px;
+    padding-right: 40px;
+  }
+
+  h1 {
+    font-size: 36px;
+  }
+
+  .greeting-name {
+    font-size: 36px;
+  }
+
+  /* Dashboard: progress card on the left (stays in view while scrolling),
+     category selector and goal lists on the right. */
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    grid-template-areas:
+      'hero selector'
+      'hero feed';
+    grid-template-rows: auto 1fr;
+    column-gap: var(--space-6);
+    align-items: start;
+  }
+
+  .dashboard-grid > .selector {
+    grid-area: selector;
+    margin-bottom: 0;
+  }
+
+  .dashboard-grid > .hero-card {
+    grid-area: hero;
+    position: sticky;
+    top: var(--space-6);
+  }
+
+  .dashboard-grid .bento-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .dashboard-feed {
+    grid-area: feed;
+  }
+
+  .dashboard-feed .feed-section:first-child .section-title {
+    margin-top: var(--space-5);
+  }
+
+  /* Goal details: info on the left, progress on the right. */
+  .details-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    gap: var(--space-6);
+    align-items: start;
+  }
+
+  .details-grid .progress-card {
+    margin-top: 0;
+    position: sticky;
+    top: var(--space-6);
+  }
+
+  /* Forms read best at a comfortable width, not stretched across the screen. */
+  .goal-form {
+    max-width: 760px;
+  }
+}
+
+@media (min-width: 1440px) {
+  .container {
+    max-width: 1240px;
+  }
+}
+
+/* Short landscape phones: keep the sticky cards from covering the screen. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .dashboard-grid > .hero-card,
+  .details-grid .progress-card {
+    position: static;
+  }
+
+  .container {
+    padding-top: var(--space-5);
+  }
+}

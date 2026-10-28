@@ -1,0 +1,98 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // True when the request comes from a signed-in user whose uid matches the path.
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function isValidName(name) {
+      return name is string && name.size() > 0 && name.size() <= 50;
+    }
+
+    function isDateKey(value) {
+      return value is string && value.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    // A goal must have exactly these fields with valid values.
+    // Category list must match src/utils/constants.js.
+    function isValidGoal(goal) {
+      return goal.keys().hasAll(['title', 'description', 'category', 'frequency',
+                                 'startDate', 'endDate', 'status', 'createdAt', 'updatedAt'])
+        && goal.keys().hasOnly(['title', 'description', 'category', 'frequency',
+                                'startDate', 'endDate', 'status', 'createdAt', 'updatedAt'])
+        && goal.title is string && goal.title.size() > 0 && goal.title.size() <= 100
+        && goal.description is string && goal.description.size() <= 500
+        && goal.category in ['Health', 'Fitness', 'Learning', 'Career',
+                             'Finance', 'Mindfulness', 'Personal', 'Other']
+        && goal.frequency in ['daily', 'weekly']
+        && isDateKey(goal.startDate)
+        && (goal.endDate == null || (isDateKey(goal.endDate) && goal.endDate >= goal.startDate))
+        && goal.status in ['active', 'completed']
+        && goal.updatedAt == request.time;
+    }
+
+    // Progress can only be logged for an existing, active goal, on a date
+    // between the goal's start and end dates. get() reads the goal document.
+    function canLogProgress(userId, goalId, date) {
+      let goalPath = /databases/$(database)/documents/users/$(userId)/goals/$(goalId);
+      return exists(goalPath)
+        && get(goalPath).data.status == 'active'
+        && date >= get(goalPath).data.startDate
+        && (get(goalPath).data.endDate == null || date <= get(goalPath).data.endDate);
+    }
+
+    // User profile: users/{uid}
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+
+      // Created once at sign-up. Only these exact fields are allowed.
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasOnly(['name', 'email', 'createdAt'])
+        && isValidName(request.resource.data.name)
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.createdAt == request.time;
+
+      // Only the name can change later; email and createdAt are locked.
+      allow update: if isOwner(userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+        && isValidName(request.resource.data.name);
+
+      allow delete: if false;
+
+      // Goals: users/{uid}/goals/{goalId}
+      match /goals/{goalId} {
+        allow read, delete: if isOwner(userId);
+
+        allow create: if isOwner(userId)
+          && isValidGoal(request.resource.data)
+          && request.resource.data.createdAt == request.time;
+
+        // createdAt can never change after creation.
+        allow update: if isOwner(userId)
+          && isValidGoal(request.resource.data)
+          && request.resource.data.createdAt == resource.data.createdAt;
+
+        // Daily progress: users/{uid}/goals/{goalId}/progress/{YYYY-MM-DD}
+        // The date is the document ID, so each goal has at most one record per date.
+        match /progress/{date} {
+          allow read, delete: if isOwner(userId);
+
+          // Create only: no updates, so marking the same date twice is rejected.
+          allow create: if isOwner(userId)
+            && isDateKey(date)
+            && request.resource.data.keys().hasOnly(['date', 'completedAt'])
+            && request.resource.data.date == date
+            && request.resource.data.completedAt == request.time
+            && canLogProgress(userId, goalId, date);
+
+          allow update: if false;
+        }
+      }
+    }
+
+    // Everything else stays denied.
+  }
+}
