@@ -18,6 +18,12 @@
   --sage-60: rgba(183, 198, 194, 0.6);
   --red-10: rgba(202, 0, 19, 0.1);
 
+  /* Heatmap scale: yellow (little done) to green (all done). */
+  --heat-0: #fbf1c7;
+  --heat-1: #f3d35b;
+  --heat-2: #a8cf78;
+  --heat-3: #2f7d43;
+
   --radius-card: 40px; /* main cards */
   --radius-item: 24px; /* nested items */
   --radius-small: 16px;
@@ -275,6 +281,16 @@ button {
   background: rgba(255, 255, 255, 0.8);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
+}
+
+/* Full-width row (the streak), with a second value on the right. */
+.bento-wide {
+  grid-column: 1 / -1;
+}
+
+.bento-aside {
+  margin-left: auto;
+  text-align: right;
 }
 
 .bento-icon {
@@ -1077,6 +1093,11 @@ button {
     flex-direction: column;
     align-items: flex-start;
   }
+
+  .bento-wide {
+    flex-direction: row;
+    align-items: center;
+  }
 }
 
 @media (min-width: 768px) {
@@ -1394,28 +1415,42 @@ button {
 }
 
 .heatmap-level-0 {
-  background: var(--sage-20);
-  color: var(--sage-text);
+  background: var(--heat-0);
+  color: var(--charcoal);
 }
 
 .heatmap-level-1 {
-  background: var(--sage-60);
+  background: var(--heat-1);
   color: var(--charcoal);
 }
 
 .heatmap-level-2 {
-  background: #5f6f69;
-  color: var(--white);
+  background: var(--heat-2);
+  color: var(--charcoal);
 }
 
 .heatmap-level-3 {
-  background: var(--charcoal);
+  background: var(--heat-3);
   color: var(--white);
 }
 
 .heatmap-today {
   outline: 2px solid var(--charcoal);
   outline-offset: 2px;
+}
+
+/* Day in a run of 2+ complete days: a small flame under the date. */
+.heatmap-streak {
+  grid-template-rows: auto auto;
+  align-content: center;
+  gap: 1px;
+}
+
+.heatmap-legend-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: var(--space-2);
 }
 
 .heatmap-legend {

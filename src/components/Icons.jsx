@@ -148,6 +148,14 @@ export function CalendarIcon(props) {
   )
 }
 
+export function FlameIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-4 2.5-5 0 2 1 3 2 3.5C11 9 11 6 12 3Z" />
+    </Icon>
+  )
+}
+
 export function TrendingUpIcon(props) {
   return (
     <Icon {...props}>

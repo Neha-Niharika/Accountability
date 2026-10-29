@@ -1,7 +1,12 @@
 // Summary card for the Week and Month views: done vs due, goal count and %.
-import { CalendarIcon, CheckCircleIcon, ClockIcon, InfoIcon, TargetIcon, TrendingUpIcon } from './Icons'
+// Pass `streak` ({ current, best }) to add a streak row.
+import { CalendarIcon, CheckCircleIcon, ClockIcon, FlameIcon, InfoIcon, TargetIcon, TrendingUpIcon } from './Icons'
 
-function PeriodHero({ label, title, done, due, goalCount, percent }) {
+function daysLabel(count) {
+  return `${count} day${count === 1 ? '' : 's'}`
+}
+
+function PeriodHero({ label, title, done, due, goalCount, percent, streak }) {
   const missed = due - done
 
   return (
@@ -54,6 +59,21 @@ function PeriodHero({ label, title, done, due, goalCount, percent }) {
             <p className="bento-value">{percent}%</p>
           </div>
         </div>
+        {streak && (
+          <div className="bento bento-wide">
+            <span className="bento-icon" aria-hidden="true">
+              <FlameIcon size={16} />
+            </span>
+            <div>
+              <p className="label">Current streak</p>
+              <p className="bento-value">{daysLabel(streak.current)}</p>
+            </div>
+            <div className="bento-aside">
+              <p className="label">Best</p>
+              <p className="bento-value">{daysLabel(streak.best)}</p>
+            </div>
+          </div>
+        )}
       </div>
 
       <div

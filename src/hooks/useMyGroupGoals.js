@@ -6,21 +6,21 @@ import { getGroupErrorMessage, getMyGroupGoals } from '../services/groupService'
 // a check-in, without reloading.
 // Usage: const { items, setItems, loading, error } = useMyGroupGoals(user.uid, weekStartKey)
 export function useMyGroupGoals(uid, fromDateKey) {
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const requestKey = `${uid}|${fromDateKey}`
+
+  // `key` records which request the data belongs to. While it doesn't match
+  // the current request (e.g. the Week view moved to another week), we are loading.
+  const [result, setResult] = useState({ key: null, items: [], error: '' })
 
   useEffect(() => {
     let ignore = false
 
     async function load() {
       try {
-        const result = await getMyGroupGoals(uid, fromDateKey)
-        if (!ignore) setItems(result)
+        const items = await getMyGroupGoals(uid, fromDateKey)
+        if (!ignore) setResult({ key: requestKey, items, error: '' })
       } catch (firestoreError) {
-        if (!ignore) setError(getGroupErrorMessage(firestoreError))
-      } finally {
-        if (!ignore) setLoading(false)
+        if (!ignore) setResult({ key: requestKey, items: [], error: getGroupErrorMessage(firestoreError) })
       }
     }
 
@@ -28,7 +28,14 @@ export function useMyGroupGoals(uid, fromDateKey) {
     return () => {
       ignore = true
     }
-  }, [uid, fromDateKey])
+  }, [uid, fromDateKey, requestKey])
 
-  return { items, setItems, loading, error }
+  function setItems(update) {
+    setResult((previous) => ({
+      ...previous,
+      items: typeof update === 'function' ? update(previous.items) : update,
+    }))
+  }
+
+  return { items: result.items, setItems, loading: result.key !== requestKey, error: result.error }
 }

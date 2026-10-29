@@ -1,7 +1,7 @@
-// Dashboard "Week" tab: Monday–Sunday grid for each active goal.
+// Dashboard "Week" tab: Monday–Sunday grid for each active goal, yours and your groups'.
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useProgressRange } from '../hooks/useProgressRange'
+import { entriesInRange, useGoalEntries } from '../hooks/useGoalEntries'
 import { FREQUENCY_LABELS } from '../utils/constants'
 import { addDays, dateKeysBetween, parseDateKey, startOfWeek, toDateKey } from '../utils/dates'
 import { completionPercent } from '../utils/progress'
@@ -32,21 +32,11 @@ function WeekView({ uid, goals, today }) {
   const toKey = toDateKey(addDays(monday, 6))
   const days = dateKeysBetween(fromKey, toKey)
 
-  // Completed goals are finished, so they don't count against the week.
-  const weekGoals = goals.filter((goal) => goal.status === 'active' && isGoalInRange(goal, fromKey, toKey))
-  const { doneDatesByGoal, loading, error } = useProgressRange(
-    uid,
-    weekGoals.map((goal) => goal.id),
-    fromKey,
-    toKey,
-  )
-
-  function doneDatesFor(goal) {
-    return doneDatesByGoal.get(goal.id) ?? new Set()
-  }
+  const { entries: allEntries, loading, error, groupsError } = useGoalEntries(uid, goals, fromKey, toKey)
+  const entries = entriesInRange(allEntries, fromKey, toKey)
 
   const statsByGoal = new Map(
-    weekGoals.map((goal) => [goal.id, periodStats(goal, doneDatesFor(goal), fromKey, toKey, todayKey)]),
+    entries.map((entry) => [entry.key, periodStats(entry.goal, entry.doneDates, fromKey, toKey, todayKey)]),
   )
   const totalDue = [...statsByGoal.values()].reduce((sum, stats) => sum + stats.due, 0)
   const totalDone = [...statsByGoal.values()].reduce((sum, stats) => sum + stats.done, 0)
@@ -84,39 +74,43 @@ function WeekView({ uid, goals, today }) {
         <LoadError message={error} />
       ) : (
         <>
+          {groupsError && (
+            <p className="status status-error page-status">Couldn’t load your group goals. {groupsError}</p>
+          )}
           <PeriodHero
             label={weekOffset === 0 ? 'This week' : 'Week'}
             title={rangeLabel}
             done={totalDone}
             due={totalDue}
-            goalCount={weekGoals.length}
+            goalCount={entries.length}
             percent={completionPercent(totalDone, totalDue)}
           />
 
           <div className="dashboard-feed">
             <h2 className="section-title">Goals this week</h2>
-            {weekGoals.length === 0 ? (
+            {entries.length === 0 ? (
               <p className="muted">No active goals in this week.</p>
             ) : (
               <ul className="feed-list">
-                {weekGoals.map((goal) => {
-                  const stats = statsByGoal.get(goal.id)
+                {entries.map(({ key, goal, doneDates, to, label }) => {
+                  const stats = statsByGoal.get(key)
                   return (
-                    <li key={goal.id} className="feed-item period-item">
+                    <li key={key} className="feed-item period-item">
                       <span className="icon-box" aria-hidden="true">
                         <CategoryIcon category={goal.category} />
                       </span>
                       <div className="feed-item-text">
-                        <Link to={`/goals/${goal.id}`} className="feed-item-title">
+                        <Link to={to} className="feed-item-title">
                           {goal.title}
                         </Link>
                         <span className="feed-item-meta">
+                          {label && `${label} · `}
                           {FREQUENCY_LABELS[goal.frequency]} · {stats.done}/{stats.due} ·{' '}
                           {completionPercent(stats.done, stats.due)}%
                         </span>
                         <ol className="week-row" aria-label={`${goal.title}, this week`}>
                           {days.map((dateKey) => {
-                            const state = dayState(goal, dateKey, doneDatesFor(goal), todayKey)
+                            const state = dayState(goal, dateKey, doneDates, todayKey)
                             const date = parseDateKey(dateKey)
                             return (
                               <li

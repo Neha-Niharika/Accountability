@@ -78,3 +78,36 @@ export function sinceStartStats(goals, doneDatesByGoal, todayKey) {
   }
   return { due, done }
 }
+
+// Streaks of complete days: every daily goal due that day is done (the darkest
+// heatmap shade). A day with no daily goals due, or with one left undone,
+// breaks the streak. Today is still in progress, so an unfinished today
+// doesn't break it, it just isn't counted yet.
+// Returns { current, best, streakDays }: `streakDays` holds the dates that
+// belong to a run of two or more complete days, for marking on the heatmap.
+export function streakStats(goals, doneDatesByGoal, todayKey) {
+  const dailyGoals = goals.filter((goal) => goal.frequency === 'daily')
+  if (dailyGoals.length === 0) return { current: 0, best: 0, streakDays: new Set() }
+
+  const firstKey = dailyGoals.map((goal) => goal.startDate).reduce(minKey)
+  let run = []
+  let best = 0
+  const streakDays = new Set()
+
+  function endRun() {
+    best = Math.max(best, run.length)
+    if (run.length >= 2) run.forEach((dateKey) => streakDays.add(dateKey))
+    run = []
+  }
+
+  for (const dateKey of dateKeysBetween(firstKey, todayKey)) {
+    const { due, done } = dayCompletion(dailyGoals, doneDatesByGoal, dateKey)
+    const complete = due > 0 && done === due
+    if (complete) run.push(dateKey)
+    else if (dateKey !== todayKey) endRun()
+  }
+  const current = run.length
+  endRun()
+
+  return { current, best, streakDays }
+}

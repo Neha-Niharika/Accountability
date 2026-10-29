@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import { addDays, dateKeysBetween, endOfMonth, startOfWeek, toDateKey } from '../src/utils/dates.js'
-import { dayCompletion, isGoalInRange, periodStats, shadeLevel, sinceStartStats } from '../src/utils/stats.js'
+import { dayCompletion, isGoalInRange, periodStats, shadeLevel, sinceStartStats, streakStats } from '../src/utils/stats.js'
 
 function goal(overrides = {}) {
   return { id: 'g1', frequency: 'daily', startDate: '2026-10-01', endDate: null, status: 'active', ...overrides }
@@ -91,5 +91,43 @@ describe('shadeLevel and sinceStartStats', () => {
 
   test('nothing due gives zeros', () => {
     assert.deepEqual(sinceStartStats([], new Map(), '2026-10-28'), { due: 0, done: 0 })
+  })
+})
+
+describe('streakStats', () => {
+  const goals = [goal({ startDate: '2026-10-20' }), goal({ id: 'g2', startDate: '2026-10-20' })]
+  const both = (...dates) => new Map([['g1', new Set(dates)], ['g2', new Set(dates)]])
+
+  test('counts complete days up to today; an unfinished today does not break it', () => {
+    const doneDatesByGoal = both('2026-10-20', '2026-10-21', '2026-10-23', '2026-10-24', '2026-10-25')
+    const stats = streakStats(goals, doneDatesByGoal, '2026-10-26')
+    assert.equal(stats.current, 3)
+    assert.equal(stats.best, 3)
+    assert.deepEqual([...stats.streakDays].sort(), ['2026-10-20', '2026-10-21', '2026-10-23', '2026-10-24', '2026-10-25'])
+  })
+
+  test('a day with one goal left undone breaks the streak', () => {
+    const doneDatesByGoal = both('2026-10-20', '2026-10-22')
+    doneDatesByGoal.get('g1').add('2026-10-21')
+    const stats = streakStats(goals, doneDatesByGoal, '2026-10-22')
+    assert.equal(stats.current, 1)
+    assert.equal(stats.best, 1)
+    assert.equal(stats.streakDays.size, 0) // runs of one day are not marked
+  })
+
+  test('a day with no daily goals due breaks the streak', () => {
+    const gapGoals = [goal({ startDate: '2026-10-20', endDate: '2026-10-21' }), goal({ id: 'g2', startDate: '2026-10-23' })]
+    const doneDatesByGoal = new Map([
+      ['g1', new Set(['2026-10-20', '2026-10-21'])],
+      ['g2', new Set(['2026-10-23', '2026-10-24'])],
+    ])
+    const stats = streakStats(gapGoals, doneDatesByGoal, '2026-10-24')
+    assert.equal(stats.current, 2)
+    assert.equal(stats.best, 2)
+  })
+
+  test('weekly goals are ignored', () => {
+    const stats = streakStats([goal({ frequency: 'weekly' })], new Map(), '2026-10-24')
+    assert.deepEqual(stats, { current: 0, best: 0, streakDays: new Set() })
   })
 })
