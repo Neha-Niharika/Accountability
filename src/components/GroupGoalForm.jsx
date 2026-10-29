@@ -1,14 +1,22 @@
-// Owner only: add a shared goal to the group.
+// Owner only: add a shared goal to the group, or edit one (pass `goal`).
 import { useState } from 'react'
 import { getGroupErrorMessage } from '../services/groupService'
 import { FREQUENCY_LABELS } from '../utils/constants'
 import { MAX_GOAL_DESCRIPTION_LENGTH, MAX_GOAL_TITLE_LENGTH, validateGroupGoal } from '../utils/validation'
 import FormField from './FormField'
 
-const EMPTY_GOAL = { title: '', description: '', frequency: 'daily' }
+// Dates aren't here: they belong to the group (see GroupDatesForm).
+function emptyGoal() {
+  return { title: '', description: '', frequency: 'daily' }
+}
 
-function AddGroupGoalForm({ onAdd }) {
-  const [values, setValues] = useState(EMPTY_GOAL)
+function valuesFrom(goal) {
+  return { title: goal.title, description: goal.description, frequency: goal.frequency }
+}
+
+function GroupGoalForm({ goal, onSubmit, onCancel }) {
+  const editing = Boolean(goal)
+  const [values, setValues] = useState(() => (editing ? valuesFrom(goal) : emptyGoal()))
   const [errors, setErrors] = useState({})
   const [serverError, setServerError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -28,22 +36,28 @@ function AddGroupGoalForm({ onAdd }) {
 
     setSubmitting(true)
     try {
-      await onAdd(values)
-      setValues(EMPTY_GOAL)
+      await onSubmit(values)
+      // When editing, the parent closes the form; when adding, start a fresh one.
+      if (!editing) {
+        setValues(emptyGoal())
+        setSubmitting(false)
+      }
     } catch (error) {
       setServerError(getGroupErrorMessage(error))
-    } finally {
       setSubmitting(false)
     }
   }
 
+  const idPrefix = editing ? `edit-${goal.id}-` : ''
+
   return (
-    <form className="card group-form" onSubmit={handleSubmit} noValidate>
-      <h2>Add a group goal</h2>
+    <form className={`group-form ${editing ? 'edit-goal-form' : 'add-goal-form'}`} onSubmit={handleSubmit} noValidate>
+      <h3>{editing ? 'Edit goal' : 'Add a group goal'}</h3>
       {serverError && <p className="status status-error page-status">{serverError}</p>}
       <FormField
         label="Title"
         name="title"
+        id={`${idPrefix}title`}
         value={values.title}
         onChange={handleChange}
         error={errors.title}
@@ -53,6 +67,7 @@ function AddGroupGoalForm({ onAdd }) {
       <FormField
         label="Description (optional)"
         name="description"
+        id={`${idPrefix}description`}
         as="textarea"
         rows={2}
         value={values.description}
@@ -63,6 +78,7 @@ function AddGroupGoalForm({ onAdd }) {
       <FormField
         label="Frequency"
         name="frequency"
+        id={`${idPrefix}frequency`}
         as="select"
         value={values.frequency}
         onChange={handleChange}
@@ -74,11 +90,22 @@ function AddGroupGoalForm({ onAdd }) {
           </option>
         ))}
       </FormField>
-      <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
-        {submitting ? 'Adding…' : 'Add goal'}
-      </button>
+      {editing ? (
+        <div className="form-actions">
+          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={submitting}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={submitting}>
+            {submitting ? 'Saving…' : 'Save changes'}
+          </button>
+        </div>
+      ) : (
+        <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
+          {submitting ? 'Adding…' : 'Add goal'}
+        </button>
+      )}
     </form>
   )
 }
 
-export default AddGroupGoalForm
+export default GroupGoalForm

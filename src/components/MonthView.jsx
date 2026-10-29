@@ -5,7 +5,7 @@ import { useProgressRange } from '../hooks/useProgressRange'
 import { FREQUENCY_LABELS } from '../utils/constants'
 import { addDays, dateKeysBetween, endOfMonth, parseDateKey, startOfWeek, toDateKey } from '../utils/dates'
 import { completionPercent } from '../utils/progress'
-import { dayCompletion, isGoalInRange, periodStats } from '../utils/stats'
+import { dayCompletion, isGoalInRange, periodStats, shadeLevel } from '../utils/stats'
 import { CategoryIcon, ChevronLeftIcon, ChevronRightIcon } from './Icons'
 import LoadError from './LoadError'
 import PeriodHero from './PeriodHero'
@@ -18,13 +18,6 @@ const longDayFormatter = new Intl.DateTimeFormat(undefined, { weekday: 'long', d
 const WEEKDAY_LETTERS = dateKeysBetween('2024-01-01', '2024-01-07').map((key) =>
   weekdayFormatter.format(parseDateKey(key)),
 )
-
-// Heatmap shade: 0 = none done … 3 = all done.
-function shadeLevel({ due, done }) {
-  if (done === 0) return 0
-  if (done === due) return 3
-  return done / due < 0.5 ? 1 : 2
-}
 
 function MonthView({ uid, goals, today }) {
   const [monthOffset, setMonthOffset] = useState(0) // 0 = this month, -1 = last month…

@@ -57,6 +57,22 @@ export function validateSignIn({ email, password }) {
   return errors
 }
 
+// Shared by personal and group goals. Adds to `errors`.
+function validateDates(errors, startDate, endDate) {
+  if (!DATE_KEY_PATTERN.test(startDate)) {
+    errors.startDate = 'Start date is required.'
+  }
+
+  // End date is optional. 'YYYY-MM-DD' strings compare in date order.
+  if (endDate) {
+    if (!DATE_KEY_PATTERN.test(endDate)) {
+      errors.endDate = 'Enter a valid date.'
+    } else if (!errors.startDate && endDate < startDate) {
+      errors.endDate = 'End date must be on or after the start date.'
+    }
+  }
+}
+
 export function validateGoal({ title, description, category, frequency, startDate, endDate, status }) {
   const errors = {}
 
@@ -78,18 +94,7 @@ export function validateGoal({ title, description, category, frequency, startDat
     errors.frequency = 'Choose how often.'
   }
 
-  if (!DATE_KEY_PATTERN.test(startDate)) {
-    errors.startDate = 'Start date is required.'
-  }
-
-  // End date is optional. 'YYYY-MM-DD' strings compare in date order.
-  if (endDate) {
-    if (!DATE_KEY_PATTERN.test(endDate)) {
-      errors.endDate = 'Enter a valid date.'
-    } else if (!errors.startDate && endDate < startDate) {
-      errors.endDate = 'End date must be on or after the start date.'
-    }
-  }
+  validateDates(errors, startDate, endDate)
 
   if (!Object.hasOwn(STATUS_LABELS, status)) {
     errors.status = 'Choose a status.'
@@ -115,6 +120,13 @@ export function validateJoinCode({ code }) {
   } else if (!GROUP_CODE_PATTERN.test(code)) {
     errors.code = 'Codes are 6 letters and numbers, like K7MP2Q.'
   }
+  return errors
+}
+
+// The start and end dates shared by all of a group's goals.
+export function validateGroupDates({ startDate, endDate }) {
+  const errors = {}
+  validateDates(errors, startDate, endDate)
   return errors
 }
 

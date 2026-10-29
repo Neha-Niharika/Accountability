@@ -267,6 +267,8 @@ const CATEGORY_ICON_COMPONENTS = {
   Mindfulness: LeafIcon,
   Personal: UserIcon,
   Other: StarIcon,
+  // Not a goal category: the dashboard files group goals under it.
+  Groups: UsersIcon,
 }
 
 // <CategoryIcon category="Fitness" /> → the icon for that category.

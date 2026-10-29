@@ -5,13 +5,14 @@ import { CategoryIcon, CheckIcon } from './Icons'
 // One goal in the dashboard feed, with a round check button on the right.
 // `doneToday`: there is a record for today, so the check can be undone here.
 // `done`: done for this period (today, or this week for weekly goals).
-function TodayGoalItem({ goal, done, doneToday, busy, onToggle }) {
+// Group goals pass `to` (their group page) and `label` (the group's name).
+function TodayGoalItem({ goal, done, doneToday, busy, onToggle, to = `/goals/${goal.id}`, label = goal.category }) {
   // A weekly goal done on an earlier day is undone from its details page.
   const doneEarlierThisWeek = done && !doneToday
 
-  let label = `Mark "${goal.title}" as done for today`
-  if (doneToday) label = `Undo "${goal.title}" for today`
-  if (doneEarlierThisWeek) label = `"${goal.title}" is done this week`
+  let buttonLabel = `Mark "${goal.title}" as done for today`
+  if (doneToday) buttonLabel = `Undo "${goal.title}" for today`
+  if (doneEarlierThisWeek) buttonLabel = `"${goal.title}" is done this week`
 
   return (
     <li className={`feed-item${done ? ' feed-item-done' : ''}`}>
@@ -20,11 +21,11 @@ function TodayGoalItem({ goal, done, doneToday, busy, onToggle }) {
       </span>
 
       <div className="feed-item-text">
-        <Link to={`/goals/${goal.id}`} className="feed-item-title">
+        <Link to={to} className="feed-item-title">
           {goal.title}
         </Link>
         <span className="feed-item-meta">
-          {goal.category} · {FREQUENCY_LABELS[goal.frequency]}
+          {label} · {FREQUENCY_LABELS[goal.frequency]}
           {doneEarlierThisWeek && ' · Done this week'}
         </span>
       </div>
@@ -35,8 +36,8 @@ function TodayGoalItem({ goal, done, doneToday, busy, onToggle }) {
         onClick={() => onToggle(goal, !doneToday)}
         disabled={busy || doneEarlierThisWeek}
         aria-pressed={done}
-        aria-label={label}
-        title={label}
+        aria-label={buttonLabel}
+        title={buttonLabel}
       >
         {done && <CheckIcon />}
       </button>

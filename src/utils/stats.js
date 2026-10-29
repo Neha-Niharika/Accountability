@@ -58,3 +58,23 @@ export function dayCompletion(goals, doneDatesByGoal, dateKey) {
   const done = dueGoals.filter((goal) => doneDatesByGoal.get(goal.id)?.has(dateKey)).length
   return { due: dueGoals.length, done }
 }
+
+// Heatmap shade for one day: 0 = none done … 3 = all done. Needs due > 0.
+export function shadeLevel({ due, done }) {
+  if (done === 0) return 0
+  if (done === due) return 3
+  return done / due < 0.5 ? 1 : 2
+}
+
+// Everything due from each goal's own start date up to today, and how much of
+// it was done. Used for a group member's overall score.
+export function sinceStartStats(goals, doneDatesByGoal, todayKey) {
+  let due = 0
+  let done = 0
+  for (const goal of goals) {
+    const stats = periodStats(goal, doneDatesByGoal.get(goal.id) ?? new Set(), goal.startDate, todayKey, todayKey)
+    due += stats.due
+    done += stats.done
+  }
+  return { due, done }
+}

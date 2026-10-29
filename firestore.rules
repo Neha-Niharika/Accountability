@@ -126,13 +126,19 @@ service cloud.firestore {
         && value.matches('^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}$');
     }
 
+    // One start date and an optional end date for all of the group's goals.
+    function isValidGroupDates(data) {
+      return isDateKey(data.startDate) && isValidEndDate(data);
+    }
+
     function isValidGroup(data) {
       return hasExactly(data, ['name', 'code', 'ownerId', 'ownerName',
-          'createdAt'])
+          'startDate', 'endDate', 'createdAt'])
         && data.ownerId == request.auth.uid
         && isText(data.name, 1, 60)
         && isValidName(data.ownerName)
         && isGroupCode(data.code)
+        && isValidGroupDates(data)
         && data.createdAt == request.time;
     }
 
@@ -149,27 +155,44 @@ service cloud.firestore {
           || (data.role == 'member' && ownerId != request.auth.uid));
     }
 
+    // Dates live on the group, not the goal. createdAt is checked by the
+    // create and update rules.
     function isValidGroupGoal(data) {
       return hasExactly(data, ['title', 'description', 'frequency',
-          'createdAt'])
+          'createdAt', 'updatedAt'])
         && isText(data.title, 1, 100)
         && isText(data.description, 0, 500)
         && data.frequency in ['daily', 'weekly']
-        && data.createdAt == request.time;
+        && data.updatedAt == request.time;
+    }
+
+    // Check-ins only within the group's dates. Groups created before dates
+    // existed have no startDate, so any date is allowed for them.
+    function isWithinGroupDates(groupId, date) {
+      let group = groupData(groupId);
+      return date >= group.get('startDate', '')
+        && (group.get('endDate', null) == null || date <= group.endDate);
+    }
+
+    // Your own check-in, or the owner filling in for a current member.
+    function canCheckInFor(groupId, uid) {
+      return uid == request.auth.uid
+        || (isGroupOwner(groupId) && exists(memberPath(groupId, uid)));
     }
 
     // The ID is {goalId}_{date}_{uid}: one check-in per goal, date, person.
     function isValidCheckin(data, groupId, checkinId) {
       return hasExactly(data, ['goalId', 'uid', 'name', 'date', 'note',
           'completedAt'])
-        && data.uid == request.auth.uid
+        && canCheckInFor(groupId, data.uid)
         && data.goalId is string
         && isDateKey(data.date)
         && checkinId == data.goalId + '_' + data.date + '_' + data.uid
         && isValidName(data.name)
         && isText(data.note, 0, 140)
         && data.completedAt == request.time
-        && exists(groupGoalPath(groupId, data.goalId));
+        && exists(groupGoalPath(groupId, data.goalId))
+        && isWithinGroupDates(groupId, data.date);
     }
 
     // ------------------------------------------------------------ Rules
@@ -235,7 +258,11 @@ service cloud.firestore {
       allow create: if signedIn()
         && isValidGroup(request.resource.data);
 
-      allow update: if false;
+      // The owner may change the dates, and nothing else.
+      allow update: if signedIn()
+        && resource.data.ownerId == request.auth.uid
+        && onlyChanged(['startDate', 'endDate'])
+        && isValidGroupDates(request.resource.data);
 
       allow delete: if signedIn()
         && resource.data.ownerId == request.auth.uid;
@@ -256,14 +283,19 @@ service cloud.firestore {
           && (memberId == request.auth.uid || isGroupOwner(groupId));
       }
 
-      // Shared goals: only the owner adds or deletes them.
+      // Shared goals: only the owner adds, edits or deletes them.
       match /goals/{goalId} {
         allow read: if isMember(groupId);
 
         allow create: if isGroupOwner(groupId)
-          && isValidGroupGoal(request.resource.data);
+          && isValidGroupGoal(request.resource.data)
+          && request.resource.data.createdAt == request.time;
 
-        allow update: if false;
+        // createdAt can never change after creation.
+        allow update: if isGroupOwner(groupId)
+          && isValidGroupGoal(request.resource.data)
+          && request.resource.data.createdAt == resource.data.createdAt;
+
         allow delete: if isGroupOwner(groupId);
       }
 
@@ -274,13 +306,13 @@ service cloud.firestore {
         allow create: if isMember(groupId)
           && isValidCheckin(request.resource.data, groupId, checkinId);
 
-        // Only the author edits, and only the note.
+        // Only the note changes: by its member, or by the owner.
         allow update: if isMember(groupId)
-          && resource.data.uid == request.auth.uid
+          && (resource.data.uid == request.auth.uid || isGroupOwner(groupId))
           && onlyChanged(['note'])
           && isText(request.resource.data.note, 0, 140);
 
-        // Authors undo their own; the owner can clear any.
+        // Members undo their own; the owner can clear any.
         allow delete: if signedIn()
           && (resource.data.uid == request.auth.uid
             || isGroupOwner(groupId));

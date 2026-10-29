@@ -288,6 +288,8 @@ describe('groups', () => {
       code: 'ABCD23',
       ownerId: 'alice',
       ownerName: 'Alice',
+      startDate: '2026-10-01',
+      endDate: null,
       createdAt: serverTimestamp(),
     })
     batch.set(doc(firestore, 'groupCodes/ABCD23'), { groupId: 'new' })
@@ -296,10 +298,35 @@ describe('groups', () => {
     await assertSucceeds(batch.commit())
   })
 
-  test('cannot create a group for someone else or with a bad code', async () => {
-    const group = { name: 'X', code: 'ABCD23', ownerId: 'bob', ownerName: 'Bob', createdAt: serverTimestamp() }
+  test('cannot create a group for someone else, with a bad code or bad dates', async () => {
+    const group = {
+      name: 'X',
+      code: 'ABCD23',
+      ownerId: 'bob',
+      ownerName: 'Bob',
+      startDate: '2026-10-01',
+      endDate: null,
+      createdAt: serverTimestamp(),
+    }
+    const mine = { ...group, ownerId: 'alice' }
     await assertFails(setDoc(doc(db('alice'), 'groups/g2'), group))
-    await assertFails(setDoc(doc(db('alice'), 'groups/g3'), { ...group, ownerId: 'alice', code: 'abc' }))
+    await assertFails(setDoc(doc(db('alice'), 'groups/g3'), { ...mine, code: 'abc' }))
+    const { startDate: _omitted, ...withoutStart } = mine
+    await assertFails(setDoc(doc(db('alice'), 'groups/g4'), withoutStart))
+    await assertFails(setDoc(doc(db('alice'), 'groups/g5'), { ...mine, endDate: '2026-09-30' }))
+  })
+
+  test('only the owner changes the group dates, and nothing else', async () => {
+    await seedGroup()
+    await bobJoins()
+    // The seeded group has no dates; the owner adds them.
+    const dates = { startDate: '2026-10-05', endDate: '2026-12-31' }
+    await assertFails(updateDoc(doc(db('bob'), 'groups/grp'), dates))
+    await assertSucceeds(updateDoc(doc(db('alice'), 'groups/grp'), dates))
+    await assertSucceeds(updateDoc(doc(db('alice'), 'groups/grp'), { endDate: null }))
+    await assertFails(updateDoc(doc(db('alice'), 'groups/grp'), { endDate: '2026-10-01' }))
+    await assertFails(updateDoc(doc(db('alice'), 'groups/grp'), { name: 'Renamed' }))
+    await assertFails(updateDoc(doc(db('alice'), 'groups/grp'), { code: 'ZZZZ22' }))
   })
 
   test('a code that is already taken cannot be overwritten', async () => {
@@ -340,14 +367,53 @@ describe('groups', () => {
     await assertSucceeds(getDoc(doc(db('bob'), 'groups/grp')))
   })
 
+  function groupGoal(overrides = {}) {
+    return {
+      title: 'Read',
+      description: '',
+      frequency: 'weekly',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      ...overrides,
+    }
+  }
+
   test('only the owner adds and deletes group goals', async () => {
     await seedGroup()
     await bobJoins()
-    const goal = { title: 'Read', description: '', frequency: 'weekly', createdAt: serverTimestamp() }
+    const goal = groupGoal()
     await assertFails(addDoc(collection(db('bob'), 'groups/grp/goals'), goal))
     await assertFails(deleteDoc(doc(db('bob'), 'groups/grp/goals/run')))
     await assertSucceeds(addDoc(collection(db('alice'), 'groups/grp/goals'), goal))
     await assertFails(addDoc(collection(db('alice'), 'groups/grp/goals'), { ...goal, frequency: 'hourly' }))
+    // Dates belong to the group, not the goal.
+    await assertFails(addDoc(collection(db('alice'), 'groups/grp/goals'), groupGoal({ startDate: '2026-10-01' })))
+    await assertFails(addDoc(collection(db('alice'), 'groups/grp/goals'), groupGoal({ updatedAt: '2026-10-01' })))
+  })
+
+  test('only the owner edits a group goal, and createdAt stays the same', async () => {
+    await seedGroup()
+    await bobJoins()
+    const edit = { title: 'Run 45 minutes', frequency: 'weekly', updatedAt: serverTimestamp() }
+    await assertFails(updateDoc(doc(db('bob'), 'groups/grp/goals/run'), edit))
+    await assertSucceeds(updateDoc(doc(db('alice'), 'groups/grp/goals/run'), edit))
+    await assertFails(
+      updateDoc(doc(db('alice'), 'groups/grp/goals/run'), { createdAt: serverTimestamp(), updatedAt: serverTimestamp() }),
+    )
+    await assertFails(
+      updateDoc(doc(db('alice'), 'groups/grp/goals/run'), { startDate: '2026-10-01', updatedAt: serverTimestamp() }),
+    )
+  })
+
+  test('check-ins must fall within the group dates', async () => {
+    await seedGroup()
+    await bobJoins()
+    await updateDoc(doc(db('alice'), 'groups/grp'), { startDate: '2026-10-10', endDate: '2026-10-20' })
+    const bobDb = db('bob')
+    await assertFails(setDoc(doc(bobDb, 'groups/grp/checkins/run_2026-10-09_bob'), checkin('bob', '2026-10-09')))
+    await assertFails(setDoc(doc(bobDb, 'groups/grp/checkins/run_2026-10-21_bob'), checkin('bob', '2026-10-21')))
+    await assertSucceeds(setDoc(doc(bobDb, 'groups/grp/checkins/run_2026-10-10_bob'), checkin('bob', '2026-10-10')))
+    await assertSucceeds(setDoc(doc(bobDb, 'groups/grp/checkins/run_2026-10-20_bob'), checkin('bob', '2026-10-20')))
   })
 
   test('members check in as themselves, once per goal and date', async () => {
@@ -366,13 +432,32 @@ describe('groups', () => {
     await assertSucceeds(getDocs(query(collection(db('alice'), 'groups/grp/checkins'), where('date', '>=', '2026-10-26'))))
   })
 
-  test('only the author edits the note, and only the note', async () => {
+  test('the member or the owner edits the note, and only the note', async () => {
     await seedGroup()
     await bobJoins()
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'groups/grp/members/carol'), member())
+    })
     await setDoc(doc(db('bob'), 'groups/grp/checkins/run_2026-10-28_bob'), checkin('bob'))
     await assertSucceeds(updateDoc(doc(db('bob'), 'groups/grp/checkins/run_2026-10-28_bob'), { note: 'Felt great' }))
     await assertFails(updateDoc(doc(db('bob'), 'groups/grp/checkins/run_2026-10-28_bob'), { date: '2026-10-01' }))
-    await assertFails(updateDoc(doc(db('alice'), 'groups/grp/checkins/run_2026-10-28_bob'), { note: 'Edited' }))
+    await assertSucceeds(updateDoc(doc(db('alice'), 'groups/grp/checkins/run_2026-10-28_bob'), { note: 'Edited' }))
+    // Another member can't.
+    await assertFails(updateDoc(doc(db('carol'), 'groups/grp/checkins/run_2026-10-28_bob'), { note: 'Nope' }))
+  })
+
+  test('the owner can fill in check-ins for members, but nobody else can', async () => {
+    await seedGroup()
+    await bobJoins()
+    const aliceDb = db('alice')
+    // Alice (owner) fills in a past day for Bob.
+    await assertSucceeds(setDoc(doc(aliceDb, 'groups/grp/checkins/run_2026-10-21_bob'), checkin('bob', '2026-10-21')))
+    // Not for someone who isn't in the group.
+    await assertFails(setDoc(doc(aliceDb, 'groups/grp/checkins/run_2026-10-21_carol'), checkin('carol', '2026-10-21')))
+    // Bob (member) can't fill in for Alice.
+    await assertFails(setDoc(doc(db('bob'), 'groups/grp/checkins/run_2026-10-21_alice'), checkin('alice', '2026-10-21')))
+    // The owner can undo it again.
+    await assertSucceeds(deleteDoc(doc(aliceDb, 'groups/grp/checkins/run_2026-10-21_bob')))
   })
 
   test('members can leave; the owner can delete the group', async () => {

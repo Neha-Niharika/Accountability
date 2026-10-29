@@ -1573,28 +1573,174 @@ button {
   color: var(--white);
 }
 
-.group-goals .section-title {
-  margin-top: 0;
+/* Group page: the header shows member avatars where the dashboard has yours. */
+.greeting-header .avatar-stack {
+  flex-shrink: 0;
+  margin-top: var(--space-1);
 }
 
-.group-goals > .group-form {
-  margin-bottom: var(--space-4);
-}
-
-.group-goal-list {
-  list-style: none;
+.group-side {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  margin: 0;
+}
+
+/* "Manage group": join code, add goal, delete / leave. Collapsed by default. */
+.manage-group {
+  margin-top: var(--space-4);
+}
+
+.group-side .manage-group {
+  margin-top: 0;
+}
+
+.manage-group summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.manage-group summary .muted {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.manage-group .share-code {
+  margin-top: var(--space-4);
+}
+
+.group-dates-form,
+.add-goal-form {
+  margin-top: var(--space-5);
+}
+
+.edit-goal-form {
+  margin-top: var(--space-3);
+}
+
+/* Group month: members × days heatmap. Scrolls sideways; names stay pinned. */
+.member-heatmap-hint {
+  margin: var(--space-1) 0 0;
+  font-size: 13px;
+}
+
+.member-heatmap-wrap {
+  margin-top: var(--space-4);
+  overflow-x: auto;
+}
+
+.member-heatmap {
+  border-collapse: separate;
+  border-spacing: 3px;
+}
+
+.member-heatmap th {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--sage-text);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.member-heatmap td {
   padding: 0;
 }
 
-.group-goal-header {
+.member-heatmap-weekday {
+  display: block;
+  font-weight: 600;
+}
+
+.member-heatmap th.member-heatmap-today {
+  color: var(--charcoal);
+}
+
+/* More specific than `.member-heatmap th`, so it wins without !important. */
+.member-heatmap th.member-heatmap-name {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 108px;
+  max-width: 140px;
+  padding-right: var(--space-2);
+  background: var(--white);
+  text-align: left;
+}
+
+.member-heatmap-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--charcoal);
+}
+
+/* Charcoal, not red: red is kept for actions. */
+.member-heatmap-percent {
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--charcoal);
+}
+
+.member-heatmap-cell {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+}
+
+.member-heatmap-note {
+  margin-top: var(--space-3);
+  font-size: 13px;
+}
+
+/* Group goal row: a dashboard feed item that expands to show everyone. */
+.group-goal-item {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.group-goal-row {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-bottom: var(--space-2);
+}
+
+.group-goal-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.group-goal-chevron {
+  display: grid;
+  flex-shrink: 0;
+  color: var(--sage-text);
+  transition: transform 0.2s ease-in-out;
+}
+
+.group-goal-toggle[aria-expanded='true'] .group-goal-chevron {
+  transform: rotate(90deg);
+}
+
+.group-goal-panel {
+  padding: var(--space-2) var(--space-1) var(--space-1);
+}
+
+.group-goal-panel .goal-card-description {
+  margin-top: var(--space-2);
 }
 
 .my-status {
@@ -1623,7 +1769,7 @@ button {
   font-weight: 800;
 }
 
-.group-goal .info-box {
+.group-goal-panel .info-box {
   margin: var(--space-4) 0;
 }
 
@@ -1710,9 +1856,60 @@ button {
   padding: 0;
 }
 
+/* Column header: weekday letter over the day of the month. */
+.week-board-weekday,
+.week-board-date {
+  display: block;
+}
+
+.week-board-date {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0;
+  color: var(--charcoal);
+}
+
+/* Today's date in a dark chip (red is kept for actions). */
+.week-board th.week-board-today .week-board-date {
+  margin: 0 auto;
+  width: 24px;
+  border-radius: var(--radius-pill);
+  background: var(--charcoal);
+  color: var(--white);
+}
+
 .week-board .day-cell {
   margin: 0 auto;
   max-width: 32px;
+}
+
+/* Days you can fill in on the Week tab. A dashed edge marks them as tappable. */
+.day-cell-button {
+  min-width: 28px;
+  padding: 0;
+  border: 1.5px dashed var(--sage);
+  font: inherit;
+  cursor: pointer;
+}
+
+.day-cell-button.day-cell-done {
+  border-style: solid;
+  border-color: var(--charcoal);
+}
+
+.day-cell-button:disabled {
+  cursor: progress;
+  opacity: 0.55;
+}
+
+@media (hover: hover) {
+  .day-cell-button:hover:not(:disabled) {
+    border-color: var(--red);
+  }
+}
+
+.week-fill-hint {
+  margin-top: 0;
 }
 
 /* More specific than `.week-board th`, so it wins without !important. */
@@ -1748,8 +1945,14 @@ button {
     top: var(--space-6);
   }
 
-  .details-grid .group-hero {
-    position: sticky;
-    top: var(--space-6);
+  /* The left column can grow (Manage group), so it scrolls with the page. */
+  .group-side {
+    grid-area: hero;
+  }
+
+  /* No category selector here, so the feed starts level with the progress card. */
+  .group-dashboard .dashboard-feed .feed-section:first-child .section-title,
+  .group-dashboard .dashboard-feed > .section-title:first-child {
+    margin-top: 0;
   }
 }

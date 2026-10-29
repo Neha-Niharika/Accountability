@@ -19,15 +19,20 @@ import TodayGoalItem from '../components/TodayGoalItem'
 import WeekView from '../components/WeekView'
 import { useAuth } from '../hooks/useAuth'
 import { useGoals } from '../hooks/useGoals'
+import { useMyGroupGoals } from '../hooks/useMyGroupGoals'
 import { useToday } from '../hooks/useToday'
 import { useProgressRange } from '../hooks/useProgressRange'
 import { getFirestoreErrorMessage } from '../services/goalService'
+import { checkIn, getGroupErrorMessage, memberName, undoCheckIn } from '../services/groupService'
 import { markGoalDone, undoGoalDone } from '../services/progressService'
 import { startOfWeek, toDateKey } from '../utils/dates'
 import { initialsOf } from '../utils/names'
 import { completionPercent, isDoneForPeriod, isGoalDueOn } from '../utils/progress'
+import { isGoalInRange } from '../utils/stats'
 
 const ALL = 'All'
+// Group goals are listed under this name in the category selector.
+const GROUPS = 'Groups'
 
 // Dashboard tabs. The choice lives in the URL (?view=week) so a refresh keeps it.
 const VIEWS = { today: 'Today', week: 'Week', month: 'Month' }
@@ -74,71 +79,108 @@ function Dashboard() {
     todayKey,
   )
 
-  const [selectedCategory, setSelectedCategory] = useState(ALL)
-  const [busyGoalId, setBusyGoalId] = useState(null)
-  const [actionError, setActionError] = useState('')
+  // Goals from your groups, with only your own check-ins this week.
+  const {
+    items: groupItems,
+    setItems: setGroupItems,
+    loading: groupsLoading,
+    error: groupsError,
+  } = useMyGroupGoals(user.uid, weekStartKey)
 
-  async function handleToggle(goal, done) {
-    setActionError('')
-    setBusyGoalId(goal.id)
-    try {
-      if (done) {
-        await markGoalDone(user.uid, goal.id, todayKey)
-      } else {
-        await undoGoalDone(user.uid, goal.id, todayKey)
-      }
-      updateDoneDates(goal.id, (dates) => {
-        const next = new Set(dates)
-        if (done) next.add(todayKey)
-        else next.delete(todayKey)
-        return next
-      })
-    } catch (firestoreError) {
-      setActionError(getFirestoreErrorMessage(firestoreError))
-    } finally {
-      setBusyGoalId(null)
-    }
-  }
+  const [selectedCategory, setSelectedCategory] = useState(ALL)
+  const [busyKey, setBusyKey] = useState(null)
+  const [actionError, setActionError] = useState('')
 
   // Stats are calculated from state on every render, never stored.
   function doneDatesFor(goal) {
     return doneDatesByGoal.get(goal.id) ?? new Set()
   }
-  function isDone(goal) {
-    return isDoneForPeriod(goal, doneDatesFor(goal), todayKey, weekStartKey)
+
+  // One list for today: your goals, then your groups' goals (filed under "Groups").
+  // `group` is set for group goals.
+  const entries = [
+    ...todaysGoals.map((goal) => ({ key: goal.id, goal, doneDates: doneDatesFor(goal), group: null })),
+    ...groupItems
+      .filter((item) => isGoalInRange(item.goal, todayKey, todayKey))
+      .map((item) => ({
+        key: `group-${item.group.id}-${item.goal.id}`,
+        goal: { ...item.goal, category: GROUPS },
+        doneDates: item.doneDates,
+        group: item.group,
+      })),
+  ]
+
+  function isDone(entry) {
+    return isDoneForPeriod(entry.goal, entry.doneDates, todayKey, weekStartKey)
   }
-  const completedCount = todaysGoals.filter(isDone).length
-  const pendingCount = todaysGoals.length - completedCount
-  const percent = completionPercent(completedCount, todaysGoals.length)
+
+  async function handleToggle(entry, done) {
+    const { goal, group } = entry
+    setActionError('')
+    setBusyKey(entry.key)
+    try {
+      if (group) {
+        if (done) await checkIn(group.id, goal.id, todayKey, { id: user.uid, name: memberName(user) }, '')
+        else await undoCheckIn(group.id, goal.id, todayKey, user.uid)
+        setGroupItems((previous) =>
+          previous.map((item) => {
+            if (item.group.id !== group.id || item.goal.id !== goal.id) return item
+            const doneDates = new Set(item.doneDates)
+            if (done) doneDates.add(todayKey)
+            else doneDates.delete(todayKey)
+            return { ...item, doneDates }
+          }),
+        )
+      } else {
+        if (done) await markGoalDone(user.uid, goal.id, todayKey)
+        else await undoGoalDone(user.uid, goal.id, todayKey)
+        updateDoneDates(goal.id, (dates) => {
+          const next = new Set(dates)
+          if (done) next.add(todayKey)
+          else next.delete(todayKey)
+          return next
+        })
+      }
+    } catch (firestoreError) {
+      setActionError(group ? getGroupErrorMessage(firestoreError) : getFirestoreErrorMessage(firestoreError))
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
+  const completedCount = entries.filter(isDone).length
+  const pendingCount = entries.length - completedCount
+  const percent = completionPercent(completedCount, entries.length)
 
   // Category selector: only categories that have goals today.
-  const categories = [ALL, ...new Set(todaysGoals.map((goal) => goal.category))]
+  const categories = [ALL, ...new Set(entries.map((entry) => entry.goal.category))]
   // If the selected category has no goals any more, fall back to All.
   const activeCategory = categories.includes(selectedCategory) ? selectedCategory : ALL
-  const goalsInCategory =
-    activeCategory === ALL ? todaysGoals : todaysGoals.filter((goal) => goal.category === activeCategory)
-  const pendingGoals = goalsInCategory.filter((goal) => !isDone(goal))
-  const completedGoals = goalsInCategory.filter(isDone)
+  const entriesInCategory =
+    activeCategory === ALL ? entries : entries.filter((entry) => entry.goal.category === activeCategory)
+  const pendingEntries = entriesInCategory.filter((entry) => !isDone(entry))
+  const completedEntries = entriesInCategory.filter(isDone)
 
-  const loading = goalsLoading || progressLoading
+  const loading = goalsLoading || progressLoading || groupsLoading
   const name = user.displayName || 'there'
 
-  function renderItem(goal) {
+  function renderItem(entry) {
     return (
       <TodayGoalItem
-        key={goal.id}
-        goal={goal}
-        done={isDone(goal)}
-        doneToday={doneDatesFor(goal).has(todayKey)}
-        busy={busyGoalId === goal.id}
-        onToggle={handleToggle}
+        key={entry.key}
+        goal={entry.goal}
+        done={isDone(entry)}
+        doneToday={entry.doneDates.has(todayKey)}
+        busy={busyKey === entry.key}
+        onToggle={(_goal, done) => handleToggle(entry, done)}
+        {...(entry.group && { to: `/groups/${entry.group.id}`, label: entry.group.name })}
       />
     )
   }
 
   function renderCategoryButton(category) {
-    const inCategory = category === ALL ? todaysGoals : todaysGoals.filter((goal) => goal.category === category)
-    const left = inCategory.filter((goal) => !isDone(goal)).length
+    const inCategory = category === ALL ? entries : entries.filter((entry) => entry.goal.category === category)
+    const left = inCategory.filter((entry) => !isDone(entry)).length
     const active = category === activeCategory
 
     return (
@@ -196,12 +238,15 @@ function Dashboard() {
       </div>
 
       {view === 'today' && actionError && <p className="status status-error page-status">{actionError}</p>}
+      {view === 'today' && groupsError && (
+        <p className="status status-error page-status">Couldn’t load your group goals. {groupsError}</p>
+      )}
 
-      {goalsLoading ? (
+      {goalsLoading || groupsLoading ? (
         <p className="page-loading">Loading your goals…</p>
       ) : goalsError ? (
         <LoadError message={goalsError} />
-      ) : goals.length === 0 ? (
+      ) : goals.length === 0 && groupItems.length === 0 ? (
         <EmptyState
           title="No goals yet"
           message="Create your first goal and start tracking your progress each day."
@@ -219,10 +264,10 @@ function Dashboard() {
         <p className="page-loading">Loading today’s progress…</p>
       ) : progressError ? (
         <LoadError message={progressError} />
-      ) : todaysGoals.length === 0 ? (
+      ) : entries.length === 0 ? (
         <EmptyState
           title="Nothing scheduled for today"
-          message="None of your active goals are due today."
+          message="None of your active goals or group goals are due today."
           action={
             <Link to="/goals" className="btn btn-secondary">
               View all goals
@@ -273,7 +318,7 @@ function Dashboard() {
                 </span>
                 <div>
                   <p className="label">Today’s goals</p>
-                  <p className="bento-value">{todaysGoals.length}</p>
+                  <p className="bento-value">{entries.length}</p>
                 </div>
               </div>
               <div className="bento">
@@ -310,20 +355,20 @@ function Dashboard() {
 
           <div className="dashboard-feed">
             <section className="feed-section">
-              <h2 className="section-title">Pending ({pendingGoals.length})</h2>
-              {pendingGoals.length === 0 ? (
+              <h2 className="section-title">Pending ({pendingEntries.length})</h2>
+              {pendingEntries.length === 0 ? (
                 <p className="muted">Nothing left here. Great work!</p>
               ) : (
-                <ul className="feed-list">{pendingGoals.map(renderItem)}</ul>
+                <ul className="feed-list">{pendingEntries.map(renderItem)}</ul>
               )}
             </section>
 
             <section className="feed-section">
-              <h2 className="section-title">Completed ({completedGoals.length})</h2>
-              {completedGoals.length === 0 ? (
+              <h2 className="section-title">Completed ({completedEntries.length})</h2>
+              {completedEntries.length === 0 ? (
                 <p className="muted">Nothing completed yet.</p>
               ) : (
-                <ul className="feed-list">{completedGoals.map(renderItem)}</ul>
+                <ul className="feed-list">{completedEntries.map(renderItem)}</ul>
               )}
             </section>
           </div>
