@@ -1,5 +1,5 @@
-// Laid out like the Dashboard: header, Today / Week tabs, your progress card on
-// the left and the goal feed on the right.
+// Laid out like the Dashboard: header, Today / Week / Month / Rewards tabs, your
+// progress card on the left and the goal feed on the right.
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import EmptyState from '../components/EmptyState'
@@ -7,6 +7,7 @@ import GroupDatesForm from '../components/GroupDatesForm'
 import GroupGoalForm from '../components/GroupGoalForm'
 import GroupGoalItem from '../components/GroupGoalItem'
 import GroupMonthView from '../components/GroupMonthView'
+import GroupStakes from '../components/GroupStakes'
 import GroupWeekView from '../components/GroupWeekView'
 import {
   CalendarIcon,
@@ -19,6 +20,7 @@ import {
 } from '../components/Icons'
 import LoadError from '../components/LoadError'
 import ShareCode from '../components/ShareCode'
+import StakesForm from '../components/StakesForm'
 import { useAuth } from '../hooks/useAuth'
 import { useFlashMessage } from '../hooks/useFlashMessage'
 import { useGroup } from '../hooks/useGroup'
@@ -36,6 +38,7 @@ import {
   updateGroupGoal,
   withDates,
 } from '../services/groupService'
+import { addClaim, claimId, removeClaim, saveStakes } from '../services/stakesService'
 import { addDays, dateKeysBetween, formatDateKey, parseDateKey, startOfWeek, toDateKey } from '../utils/dates'
 import { initialsOf } from '../utils/names'
 import { completionPercent } from '../utils/progress'
@@ -53,7 +56,7 @@ function dateRangeLabel(group, todayKey) {
 }
 
 // Group tabs. The choice lives in the URL (?view=week) so a refresh keeps it.
-const VIEWS = { today: 'Today', week: 'Week', month: 'Month' }
+const VIEWS = { today: 'Today', week: 'Week', month: 'Month', rewards: 'Rewards' }
 
 function GroupDetails() {
   const { groupId } = useParams()
@@ -80,6 +83,7 @@ function GroupDetails() {
   // The week board cell being saved: '{goalId}_{date}_{uid}'.
   const [busyCellId, setBusyCellId] = useState(null)
   const [groupBusy, setGroupBusy] = useState(false)
+  const [busyClaimId, setBusyClaimId] = useState(null)
 
   function myMember() {
     return data.members.find((member) => member.id === user.uid)
@@ -116,6 +120,36 @@ function GroupDetails() {
       return { ...previous, group, goals: previous.goals.map((goal) => withDates(goal, group)) }
     })
     setMessage('Group dates saved.')
+  }
+
+  // Owner only. Errors are shown by the form.
+  async function handleSaveStakes(values) {
+    setMessage('')
+    setActionError('')
+    const stakes = await saveStakes({ groupId }, values, data.stakes, todayKey)
+    setData((previous) => ({ ...previous, stakes }))
+    setMessage(stakes ? 'Reward and punishment saved.' : 'Reward and punishment removed.')
+  }
+
+  // Mark your own reward claimed or punishment done, or undo it.
+  async function handleToggleClaim(event, label, done) {
+    const id = claimId(event.kind, event.date, user.uid)
+    setMessage('')
+    setActionError('')
+    setBusyClaimId(id)
+    try {
+      if (done) {
+        const claim = await addClaim({ groupId }, { kind: event.kind, date: event.date, label, uid: user.uid })
+        setData((previous) => ({ ...previous, claims: [...previous.claims, claim] }))
+      } else {
+        await removeClaim({ groupId }, id)
+        setData((previous) => ({ ...previous, claims: previous.claims.filter((claim) => claim.id !== id) }))
+      }
+    } catch (firestoreError) {
+      setActionError(getGroupErrorMessage(firestoreError))
+    } finally {
+      setBusyClaimId(null)
+    }
   }
 
   async function handleEditGoal(goal, values) {
@@ -374,6 +408,33 @@ function GroupDetails() {
         />
       ) : view === 'month' ? (
         <GroupMonthView goals={goals} members={members} checkins={checkins} myUid={user.uid} today={today} />
+      ) : view === 'rewards' ? (
+        <div className="rewards-view">
+          <GroupStakes
+            goals={goals}
+            members={members}
+            checkins={checkins}
+            stakes={data.stakes}
+            claims={data.claims}
+            myUid={user.uid}
+            todayKey={todayKey}
+            busyId={busyClaimId}
+            onToggle={handleToggleClaim}
+          >
+            {isOwner && (
+              <details className="stakes-edit" open={!data.stakes}>
+                <summary>{data.stakes ? 'Change reward or punishment' : 'Set a reward or punishment'}</summary>
+                <StakesForm
+                  stakes={data.stakes}
+                  onSubmit={handleSaveStakes}
+                  heading="For everyone in the group"
+                  help="One reward and one punishment for every member. Leave both empty to remove them."
+                  idPrefix="group-stakes-"
+                />
+              </details>
+            )}
+          </GroupStakes>
+        </div>
       ) : (
         // Phones: one column. Desktop: progress card on the left, goal lists on the right.
         <div className="dashboard-grid group-dashboard">

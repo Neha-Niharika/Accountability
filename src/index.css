@@ -1667,6 +1667,150 @@ button {
   margin-top: var(--space-3);
 }
 
+/* Rewards and punishments: summary, earned/owed list, and the edit form. */
+.stakes-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.stakes-panel > p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.stakes-summary,
+.stakes-events,
+.stakes-members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.rewards-view {
+  max-width: 720px;
+}
+
+.stakes-streak {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+}
+
+.stakes-icon-streak {
+  background: var(--heat-3);
+  color: var(--white);
+}
+
+.stakes-summary li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+}
+
+.stakes-icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+
+.stakes-icon-reward {
+  background: var(--heat-0);
+  color: var(--heat-3);
+}
+
+.stakes-icon-punishment {
+  background: var(--red-10);
+  color: var(--red);
+}
+
+.stakes-event {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-small);
+  border: 1px solid var(--sage-30);
+}
+
+.stakes-event-done {
+  background: var(--sage-20);
+}
+
+.stakes-event-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.stakes-event-title {
+  font-size: 15px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.stakes-event .btn {
+  flex-shrink: 0;
+}
+
+.stakes-members li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: 14px;
+}
+
+.stakes-edit summary {
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.stakes-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.manage-group .stakes-form {
+  margin-top: var(--space-5);
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: calc(-1 * var(--space-2));
+}
+
+.chip {
+  padding: 6px 12px;
+  border: 1px solid var(--sage-60);
+  border-radius: var(--radius-pill);
+  background: var(--white);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--charcoal);
+  cursor: pointer;
+}
+
+.chip[aria-pressed='true'] {
+  background: var(--charcoal);
+  border-color: var(--charcoal);
+  color: var(--white);
+}
+
 /* Group month: members × days heatmap. Scrolls sideways; names stay pinned. */
 .member-heatmap-hint {
   margin: var(--space-1) 0 0;

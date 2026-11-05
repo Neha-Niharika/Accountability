@@ -470,13 +470,30 @@ describe('groups', () => {
     await assertFails(deleteDoc(doc(db('bob'), 'groups/grp')))
     await assertFails(deleteDoc(doc(db('bob'), `groupCodes/${CODE}`)))
 
-    // Bob leaves: his check-ins, then his membership.
+    await setDoc(doc(db('alice'), 'groups/grp/stakes/settings'), {
+      reward: 'Eat out',
+      punishment: '',
+      rewardEvery: 7,
+      since: '2026-10-28',
+      updatedAt: serverTimestamp(),
+    })
+    const bobClaim = { uid: 'bob', kind: 'reward', date: '2026-10-28', label: 'Eat out', doneAt: serverTimestamp() }
+    await setDoc(doc(db('bob'), 'groups/grp/stakeClaims/bob_reward_2026-10-28'), bobClaim)
+    await assertFails(deleteDoc(doc(db('bob'), 'groups/grp/stakes/settings')))
+
+    // Bob leaves: his check-ins and claims, then his membership.
+    await assertSucceeds(
+      getDocs(query(collection(db('bob'), 'groups/grp/stakeClaims'), where('uid', '==', 'bob'))),
+    )
+    await assertSucceeds(deleteDoc(doc(db('bob'), 'groups/grp/stakeClaims/bob_reward_2026-10-28')))
     await assertSucceeds(deleteDoc(doc(db('bob'), 'groups/grp/checkins/run_2026-10-28_bob')))
     await assertSucceeds(deleteDoc(doc(db('bob'), 'groups/grp/members/bob')))
     await assertFails(getDoc(doc(db('bob'), 'groups/grp')))
 
     // Alice deletes the group: the code, her membership and the group in one batch.
     const aliceDb = db('alice')
+    await assertSucceeds(getDocs(collection(aliceDb, 'groups/grp/stakeClaims')))
+    await assertSucceeds(deleteDoc(doc(aliceDb, 'groups/grp/stakes/settings')))
     await assertSucceeds(deleteDoc(doc(aliceDb, 'groups/grp/goals/run')))
     const batch = writeBatch(aliceDb)
     batch.delete(doc(aliceDb, `groupCodes/${CODE}`))
@@ -485,9 +502,74 @@ describe('groups', () => {
     await assertSucceeds(batch.commit())
   })
 
+  function stakes(overrides = {}) {
+    return {
+      reward: 'Hot chocolate',
+      punishment: 'Skip tea for 7 days',
+      rewardEvery: 7,
+      since: '2026-10-28',
+      updatedAt: serverTimestamp(),
+      ...overrides,
+    }
+  }
+
+  test('only the owner sets the group reward and punishment; members read them', async () => {
+    await seedGroup()
+    await bobJoins()
+    await assertFails(setDoc(doc(db('bob'), 'groups/grp/stakes/settings'), stakes()))
+    await assertFails(setDoc(doc(db('alice'), 'groups/grp/stakes/other'), stakes()))
+    await assertFails(setDoc(doc(db('alice'), 'groups/grp/stakes/settings'), stakes({ reward: 'x'.repeat(61) })))
+    await assertFails(setDoc(doc(db('alice'), 'groups/grp/stakes/settings'), stakes({ reward: '', punishment: '' })))
+    await assertFails(setDoc(doc(db('alice'), 'groups/grp/stakes/settings'), stakes({ rewardEvery: 0 })))
+    await assertSucceeds(setDoc(doc(db('alice'), 'groups/grp/stakes/settings'), stakes()))
+    await assertSucceeds(getDoc(doc(db('bob'), 'groups/grp/stakes/settings')))
+    await assertFails(getDoc(doc(db('carol'), 'groups/grp/stakes/settings')))
+  })
+
+  test('members mark their own claims; the owner can mark anyone\'s', async () => {
+    await seedGroup()
+    await bobJoins()
+    const claim = (uid) => ({ uid, kind: 'reward', date: '2026-10-28', label: 'Hot chocolate', doneAt: serverTimestamp() })
+    await assertSucceeds(setDoc(doc(db('bob'), 'groups/grp/stakeClaims/bob_reward_2026-10-28'), claim('bob')))
+    await assertFails(setDoc(doc(db('bob'), 'groups/grp/stakeClaims/alice_reward_2026-10-28'), claim('alice')))
+    await assertFails(setDoc(doc(db('bob'), 'groups/grp/stakeClaims/wrong-id'), claim('bob')))
+    await assertSucceeds(setDoc(doc(db('alice'), 'groups/grp/stakeClaims/bob_punishment_2026-10-28'), {
+      ...claim('bob'),
+      kind: 'punishment',
+    }))
+    await assertSucceeds(deleteDoc(doc(db('bob'), 'groups/grp/stakeClaims/bob_reward_2026-10-28')))
+  })
+
   test('group memberships list is private to its owner', async () => {
     await assertSucceeds(setDoc(doc(db('bob'), 'users/bob/groupMemberships/grp'), { joinedAt: serverTimestamp() }))
     await assertFails(getDocs(collection(db('alice'), 'users/bob/groupMemberships')))
     await assertFails(setDoc(doc(db('alice'), 'users/bob/groupMemberships/x'), { joinedAt: serverTimestamp() }))
+  })
+})
+
+describe('personal rewards and punishments', () => {
+  const settings = {
+    reward: 'Spa day',
+    punishment: '',
+    rewardEvery: 10,
+    since: '2026-10-28',
+    updatedAt: serverTimestamp(),
+  }
+
+  test('only you set and read your own', async () => {
+    await assertSucceeds(setDoc(doc(db('alice'), 'users/alice/stakes/settings'), settings))
+    await assertSucceeds(getDoc(doc(db('alice'), 'users/alice/stakes/settings')))
+    await assertFails(getDoc(doc(db('bob'), 'users/alice/stakes/settings')))
+    await assertFails(setDoc(doc(db('bob'), 'users/alice/stakes/settings'), settings))
+    await assertFails(setDoc(doc(db('alice'), 'users/alice/stakes/settings'), { ...settings, extra: true }))
+  })
+
+  test('claims use {kind}_{date} as their id', async () => {
+    const claim = { kind: 'reward', date: '2026-11-04', label: 'Spa day', doneAt: serverTimestamp() }
+    await assertSucceeds(setDoc(doc(db('alice'), 'users/alice/stakeClaims/reward_2026-11-04'), claim))
+    await assertFails(setDoc(doc(db('alice'), 'users/alice/stakeClaims/reward_2026-11-05'), claim))
+    await assertFails(setDoc(doc(db('alice'), 'users/alice/stakeClaims/bonus_2026-11-04'), { ...claim, kind: 'bonus' }))
+    await assertFails(getDoc(doc(db('bob'), 'users/alice/stakeClaims/reward_2026-11-04')))
+    await assertSucceeds(deleteDoc(doc(db('alice'), 'users/alice/stakeClaims/reward_2026-11-04')))
   })
 })

@@ -9,6 +9,7 @@
 //   groups/{groupId}/goals/{goalId}        { title, description, frequency, createdAt, updatedAt }
 //   groups/{groupId}/checkins/{goalId}_{date}_{uid}
 //                                          { goalId, uid, name, date, note, completedAt }
+//   groups/{groupId}/stakes, stakeClaims   reward and punishment: see stakesService.js
 //   groupCodes/{CODE}                      { groupId }   lets a code find its group
 //   users/{uid}/groupMemberships/{groupId} { joinedAt }  lists "my groups"
 //
@@ -33,6 +34,7 @@ import { formatDateKey, toDateKey } from '../utils/dates'
 import { generateGroupCode, normaliseCode } from '../utils/groupCode'
 import { ensureOnline } from '../utils/network'
 import { getFirestoreErrorMessage } from './goalService'
+import { getGroupClaimRefs, getStakes, groupStakesRef } from './stakesService'
 
 function groupDoc(groupId) {
   return doc(db, 'groups', groupId)
@@ -221,10 +223,16 @@ export async function getGroupData(groupId, fromDateKey) {
   const group = withGroupDates(withId(groupSnapshot))
   const fromKey = group.startDate < fromDateKey ? group.startDate : fromDateKey
 
-  const [membersSnapshot, goalsSnapshot, checkinsSnapshot] = await Promise.all([
+  const [membersSnapshot, goalsSnapshot, checkinsSnapshot, { stakes, claims }] = await Promise.all([
     getDocs(query(membersCollection(groupId), orderBy('joinedAt', 'asc'))),
     getDocs(query(groupGoalsCollection(groupId), orderBy('createdAt', 'asc'))),
     getDocs(query(checkinsCollection(groupId), where('date', '>=', fromKey))),
+    // The group still opens if the rules don't cover rewards yet. Other errors
+    // still fail the load, so a save never starts from empty stakes by mistake.
+    getStakes({ groupId }).catch((error) => {
+      if (error.code === 'permission-denied') return { stakes: null, claims: [] }
+      throw error
+    }),
   ])
 
   return {
@@ -232,6 +240,8 @@ export async function getGroupData(groupId, fromDateKey) {
     members: membersSnapshot.docs.map(withId),
     goals: goalsSnapshot.docs.map((snapshot) => withDates(withId(snapshot), group)),
     checkins: checkinsSnapshot.docs.map(withId),
+    stakes,
+    claims,
   }
 }
 
@@ -312,8 +322,11 @@ export async function updateGroupDates(groupId, values) {
 // Members: removes your check-ins, then your membership.
 export async function leaveGroup(groupId, uid) {
   ensureOnline()
-  const myCheckins = await getDocs(query(checkinsCollection(groupId), where('uid', '==', uid)))
-  await deleteInBatches(myCheckins.docs.map((checkin) => checkin.ref))
+  const [myCheckins, myClaims] = await Promise.all([
+    getDocs(query(checkinsCollection(groupId), where('uid', '==', uid))),
+    getGroupClaimRefs(groupId, uid),
+  ])
+  await deleteInBatches([...myCheckins.docs.map((checkin) => checkin.ref), ...(myClaims ?? [])])
 
   const batch = writeBatch(db)
   batch.delete(doc(membersCollection(groupId), uid))
@@ -325,12 +338,15 @@ export async function leaveGroup(groupId, uid) {
 // Firestore does not delete subcollections automatically.
 export async function deleteGroup(group, uid) {
   ensureOnline()
-  const [checkins, goals, members] = await Promise.all([
+  const [checkins, goals, members, claims] = await Promise.all([
     getDocs(checkinsCollection(group.id)),
     getDocs(groupGoalsCollection(group.id)),
     getDocs(membersCollection(group.id)),
+    getGroupClaimRefs(group.id),
   ])
   await deleteInBatches([
+    // null: the rules don't cover rewards yet, so there are none to remove.
+    ...(claims ? [groupStakesRef(group.id), ...claims] : []),
     ...checkins.docs.map((snapshot) => snapshot.ref),
     ...goals.docs.map((snapshot) => snapshot.ref),
     ...members.docs.filter((snapshot) => snapshot.id !== uid).map((snapshot) => snapshot.ref),

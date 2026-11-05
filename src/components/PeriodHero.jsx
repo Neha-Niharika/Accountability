@@ -65,7 +65,7 @@ function PeriodHero({ label, title, done, due, goalCount, percent, streak }) {
               <FlameIcon size={16} />
             </span>
             <div>
-              <p className="label">Current streak</p>
+              <p className="label">Personal streak</p>
               <p className="bento-value">{daysLabel(streak.current)}</p>
             </div>
             <div className="bento-aside">

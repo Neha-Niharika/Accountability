@@ -195,6 +195,33 @@ service cloud.firestore {
         && isWithinGroupDates(groupId, data.date);
     }
 
+    // ------------------------------------------- Rewards and punishments
+
+    // .../stakes/settings: what you earn for a streak and owe for breaking
+    // it. `since` is the day they were first set; nothing before it counts.
+    // At least one of reward and punishment must be filled in.
+    function isValidStakes(data) {
+      return hasExactly(data, ['reward', 'punishment', 'rewardEvery',
+          'since', 'updatedAt'])
+        && isText(data.reward, 0, 60)
+        && isText(data.punishment, 0, 60)
+        && data.reward.size() + data.punishment.size() > 0
+        && data.rewardEvery is int
+        && data.rewardEvery >= 1
+        && data.rewardEvery <= 365
+        && isDateKey(data.since)
+        && data.updatedAt == request.time;
+    }
+
+    // A reward marked claimed or a punishment marked done. `label` keeps the
+    // text it had then, in case the stakes change later.
+    function isValidClaim(data) {
+      return data.kind in ['reward', 'punishment']
+        && isDateKey(data.date)
+        && isText(data.label, 1, 60)
+        && data.doneAt == request.time;
+    }
+
     // ------------------------------------------------------------ Rules
 
     // User profile: users/{uid}
@@ -246,6 +273,29 @@ service cloud.firestore {
         allow create: if isOwner(userId)
           && request.resource.data.keys().hasOnly(['joinedAt'])
           && request.resource.data.joinedAt == request.time;
+
+        allow update: if false;
+      }
+
+      // Your reward and punishment: users/{uid}/stakes/settings
+      match /stakes/{stakesId} {
+        allow read, delete: if isOwner(userId);
+
+        allow create, update: if isOwner(userId)
+          && stakesId == 'settings'
+          && isValidStakes(request.resource.data);
+      }
+
+      // Claimed rewards, served punishments: users/{uid}/stakeClaims/{kind}_{date}
+      // Create only; deleting one undoes it.
+      match /stakeClaims/{claimId} {
+        allow read, delete: if isOwner(userId);
+
+        allow create: if isOwner(userId)
+          && hasExactly(request.resource.data, ['kind', 'date', 'label', 'doneAt'])
+          && isValidClaim(request.resource.data)
+          && claimId == request.resource.data.kind + '_'
+            + request.resource.data.date;
 
         allow update: if false;
       }
@@ -313,6 +363,37 @@ service cloud.firestore {
           && isText(request.resource.data.note, 0, 140);
 
         // Members undo their own; the owner can clear any.
+        allow delete: if signedIn()
+          && (resource.data.uid == request.auth.uid
+            || isGroupOwner(groupId));
+      }
+
+      // The group's reward and punishment, for every member:
+      // groups/{groupId}/stakes/settings. Only the owner sets them.
+      match /stakes/{stakesId} {
+        allow read: if isMember(groupId);
+
+        allow create, update: if isGroupOwner(groupId)
+          && stakesId == 'settings'
+          && isValidStakes(request.resource.data);
+
+        allow delete: if isGroupOwner(groupId);
+      }
+
+      // Members' claims: groups/{groupId}/stakeClaims/{uid}_{kind}_{date}
+      // Your own, or the owner's for a current member, like check-ins.
+      match /stakeClaims/{claimId} {
+        allow read: if isMember(groupId);
+
+        allow create: if isMember(groupId)
+          && hasExactly(request.resource.data, ['uid', 'kind', 'date', 'label', 'doneAt'])
+          && isValidClaim(request.resource.data)
+          && canCheckInFor(groupId, request.resource.data.uid)
+          && claimId == request.resource.data.uid + '_'
+            + request.resource.data.kind + '_' + request.resource.data.date;
+
+        allow update: if false;
+
         allow delete: if signedIn()
           && (resource.data.uid == request.auth.uid
             || isGroupOwner(groupId));

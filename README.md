@@ -18,7 +18,7 @@ There is no custom backend: the browser talks to Firestore directly, and
 - **Today**: everything due today, your own goals and your groups' goals, with one tap to check off
 - **Week**: a Monday–Sunday grid per goal, showing done, missed and open days
 - **Month**: a calendar heatmap from yellow (little done) to green (all done), a score per goal,
-  and your current and best streak of days where every daily goal was done
+  and your current and best personal streak (days where every personal daily goal was done)
 - Step back through past weeks and months
 
 **Groups**
@@ -26,6 +26,14 @@ There is no custom backend: the browser talks to Firestore directly, and
 - Add shared goals; the group's start and end dates apply to all of them
 - Each member checks in on their own goals and can leave a note; the owner can fill in anyone's day
 - Week and Month tabs compare every member's progress side by side
+- Group streaks count a day when you finish at least 80% of the group's daily goals
+
+**Rewards and punishments** (the Rewards tab on the dashboard and on each group page)
+- Set a reward (earned every N streak days) and a punishment (owed when the streak breaks),
+  for your personal goals and, as the owner, for each group
+- One-tap samples like "Hot chocolate" or "Skip Instagram for 7 days", or type your own
+- Mark rewards claimed and punishments done; in a group everyone sees each other's streak
+- Days with nothing due neither extend nor break a streak
 
 **Also**
 - Works on phones and desktop
@@ -130,6 +138,8 @@ users/{uid}/goals/{goalId}                    title, description, category, freq
                                               startDate, endDate, status, createdAt, updatedAt
 users/{uid}/goals/{goalId}/progress/{date}    date, completedAt          (date = 'YYYY-MM-DD')
 users/{uid}/groupMemberships/{groupId}        joinedAt                   (lists "my groups")
+users/{uid}/stakes/settings                   reward, punishment, rewardEvery, since, updatedAt
+users/{uid}/stakeClaims/{kind}_{date}         kind, date, label, doneAt  (a claimed reward / done punishment)
 
 groups/{groupId}                              name, code, ownerId, ownerName,
                                               startDate, endDate, createdAt
@@ -137,6 +147,9 @@ groups/{groupId}/members/{uid}                name, role, code, joinedAt
 groups/{groupId}/goals/{goalId}               title, description, frequency, createdAt, updatedAt
 groups/{groupId}/checkins/{goalId}_{date}_{uid}
                                               goalId, uid, name, date, note, completedAt
+groups/{groupId}/stakes/settings              reward, punishment, rewardEvery, since, updatedAt
+groups/{groupId}/stakeClaims/{uid}_{kind}_{date}
+                                              uid, kind, date, label, doneAt
 groupCodes/{CODE}                             groupId                    (lets a code find its group)
 ```
 

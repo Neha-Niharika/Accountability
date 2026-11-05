@@ -12,6 +12,7 @@ export const MAX_GOAL_TITLE_LENGTH = 100
 export const MAX_GOAL_DESCRIPTION_LENGTH = 500
 export const MAX_GROUP_NAME_LENGTH = 60
 export const MAX_NOTE_LENGTH = 140
+export const MAX_STAKE_LENGTH = 60
 
 export function validateSignUp({ name, email, password, confirmPassword }) {
   const errors = {}
@@ -142,6 +143,23 @@ export function validateGroupGoal({ title, description, frequency }) {
   }
   if (!Object.hasOwn(FREQUENCY_LABELS, frequency)) {
     errors.frequency = 'Choose how often.'
+  }
+  return errors
+}
+
+// Reward and punishment: at least one, each up to 60 characters, and the
+// reward comes every 1–365 streak days.
+export function validateStakes({ reward, punishment, rewardEvery }) {
+  const errors = {}
+  if (reward.trim().length > MAX_STAKE_LENGTH) {
+    errors.reward = `Keep it to ${MAX_STAKE_LENGTH} characters or fewer.`
+  }
+  if (punishment.trim().length > MAX_STAKE_LENGTH) {
+    errors.punishment = `Keep it to ${MAX_STAKE_LENGTH} characters or fewer.`
+  }
+  const every = Number(rewardEvery)
+  if (!Number.isInteger(every) || every < 1 || every > 365) {
+    errors.rewardEvery = 'Enter a whole number of days from 1 to 365.'
   }
   return errors
 }

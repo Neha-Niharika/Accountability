@@ -79,15 +79,21 @@ export function sinceStartStats(goals, doneDatesByGoal, todayKey) {
   return { due, done }
 }
 
-// Streaks of complete days: every daily goal due that day is done (the darkest
-// heatmap shade). A day with no daily goals due, or with one left undone,
-// breaks the streak. Today is still in progress, so an unfinished today
-// doesn't break it, it just isn't counted yet.
-// Returns { current, best, streakDays }: `streakDays` holds the dates that
-// belong to a run of two or more complete days, for marking on the heatmap.
-export function streakStats(goals, doneDatesByGoal, todayKey) {
+// Streaks of good days. A day is good when at least `percentNeeded` of the
+// daily goals due that day are done (100 for personal goals, 80 for groups).
+// A day with no daily goals due is skipped: it neither extends nor breaks a
+// streak. Today is still in progress, so an unfinished today is skipped too.
+//
+// With `rewardEvery` set, also returns the events rewards and punishments
+// hang on: a reward every `rewardEvery` streak days, and a punishment when a
+// missed day breaks a streak. Each event is { kind, date }.
+//
+// Returns { current, best, streakDays, events }: `streakDays` holds the dates
+// that belong to a run of two or more good days, for marking on the heatmap.
+export function streakStats(goals, doneDatesByGoal, todayKey, { percentNeeded = 100, rewardEvery = 0 } = {}) {
   const dailyGoals = goals.filter((goal) => goal.frequency === 'daily')
-  if (dailyGoals.length === 0) return { current: 0, best: 0, streakDays: new Set() }
+  const events = []
+  if (dailyGoals.length === 0) return { current: 0, best: 0, streakDays: new Set(), events }
 
   const firstKey = dailyGoals.map((goal) => goal.startDate).reduce(minKey)
   let run = []
@@ -102,12 +108,25 @@ export function streakStats(goals, doneDatesByGoal, todayKey) {
 
   for (const dateKey of dateKeysBetween(firstKey, todayKey)) {
     const { due, done } = dayCompletion(dailyGoals, doneDatesByGoal, dateKey)
-    const complete = due > 0 && done === due
-    if (complete) run.push(dateKey)
-    else if (dateKey !== todayKey) endRun()
+    if (due === 0) continue
+    // Whole numbers only: 4 of 5 is exactly 80%, with no rounding surprises.
+    if (done * 100 >= due * percentNeeded) {
+      run.push(dateKey)
+      if (rewardEvery > 0 && run.length % rewardEvery === 0) events.push({ kind: 'reward', date: dateKey })
+    } else if (dateKey !== todayKey) {
+      if (run.length > 0) events.push({ kind: 'punishment', date: dateKey })
+      endRun()
+    }
   }
   const current = run.length
   endRun()
 
-  return { current, best, streakDays }
+  return { current, best, streakDays, events }
+}
+
+// The streak events a reward and punishment apply to, newest first: those on
+// or after the day they were set. A reward or punishment left empty has none.
+export function stakeEvents(stakes, events) {
+  if (!stakes) return []
+  return events.filter((event) => event.date >= stakes.since && stakes[event.kind]).reverse()
 }

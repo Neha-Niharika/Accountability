@@ -7,7 +7,7 @@ const GROUPS = 'Groups'
 
 // The goals for the Week and Month views: your active goals, then your groups'
 // goals, each with your own done dates from `loadFromKey` to `loadToKey`.
-// Each entry is { key, goal, doneDates, to, label }; `key` is unique even when
+// Each entry is { key, goal, doneDates, to, label, fromGroup }; `key` is unique even when
 // a personal goal and a group goal share an id. Pick the ones in a period with
 // `entriesInRange`.
 // Usage: const { entries, loading, error, groupsError } =
@@ -30,6 +30,7 @@ export function useGoalEntries(uid, goals, loadFromKey, loadToKey) {
       doneDates: doneDatesByGoal.get(goal.id) ?? new Set(),
       to: `/goals/${goal.id}`,
       label: null,
+      fromGroup: false,
     })),
     ...groupItems.map((item) => ({
       key: `group-${item.group.id}-${item.goal.id}`,
@@ -37,6 +38,7 @@ export function useGoalEntries(uid, goals, loadFromKey, loadToKey) {
       doneDates: item.doneDates,
       to: `/groups/${item.group.id}`,
       label: item.group.name,
+      fromGroup: true,
     })),
   ]
 

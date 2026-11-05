@@ -1,5 +1,6 @@
 // Dashboard "Month" tab: a calendar heatmap plus each goal's monthly score,
-// for your goals and your groups'.
+// for your goals and your groups'. The streak counts your personal goals only;
+// rewards and punishments are on the Rewards tab.
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { entriesInRange, useGoalEntries } from '../hooks/useGoalEntries'
@@ -42,7 +43,10 @@ function MonthView({ uid, goals, today }) {
   // The heatmap and streak helpers look goals up by id, so give each entry its unique key as id.
   const heatmapGoals = allEntries.map((entry) => ({ ...entry.goal, id: entry.key }))
   const doneDatesByKey = new Map(allEntries.map((entry) => [entry.key, entry.doneDates]))
-  const streak = streakStats(heatmapGoals, doneDatesByKey, todayKey)
+
+  // The streak: personal goals only, every one of the day's done.
+  const personalGoals = allEntries.filter((entry) => !entry.fromGroup).map((entry) => ({ ...entry.goal, id: entry.key }))
+  const streak = streakStats(personalGoals, doneDatesByKey, todayKey)
   const totalDue = [...statsByGoal.values()].reduce((sum, stats) => sum + stats.due, 0)
   const totalDone = [...statsByGoal.values()].reduce((sum, stats) => sum + stats.done, 0)
   const monthLabel = monthFormatter.format(firstDay)
@@ -140,7 +144,7 @@ function MonthView({ uid, goals, today }) {
                 <span className="heatmap-day heatmap-level-3" />
                 <span>All done</span>
                 <span className="heatmap-legend-streak">
-                  <FlameIcon size={12} /> 2+ days in a row
+                  <FlameIcon size={12} /> personal streak
                 </span>
               </div>
             </section>

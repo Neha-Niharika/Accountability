@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import { addDays, dateKeysBetween, endOfMonth, startOfWeek, toDateKey } from '../src/utils/dates.js'
-import { dayCompletion, isGoalInRange, periodStats, shadeLevel, sinceStartStats, streakStats } from '../src/utils/stats.js'
+import { dayCompletion, isGoalInRange, periodStats, shadeLevel, sinceStartStats, stakeEvents, streakStats } from '../src/utils/stats.js'
 
 function goal(overrides = {}) {
   return { id: 'g1', frequency: 'daily', startDate: '2026-10-01', endDate: null, status: 'active', ...overrides }
@@ -115,19 +115,60 @@ describe('streakStats', () => {
     assert.equal(stats.streakDays.size, 0) // runs of one day are not marked
   })
 
-  test('a day with no daily goals due breaks the streak', () => {
+  test('a day with no daily goals due is skipped, not a break', () => {
     const gapGoals = [goal({ startDate: '2026-10-20', endDate: '2026-10-21' }), goal({ id: 'g2', startDate: '2026-10-23' })]
     const doneDatesByGoal = new Map([
       ['g1', new Set(['2026-10-20', '2026-10-21'])],
       ['g2', new Set(['2026-10-23', '2026-10-24'])],
     ])
     const stats = streakStats(gapGoals, doneDatesByGoal, '2026-10-24')
-    assert.equal(stats.current, 2)
-    assert.equal(stats.best, 2)
+    assert.equal(stats.current, 4)
+    assert.equal(stats.best, 4)
+    assert.equal(stats.streakDays.has('2026-10-22'), false) // the empty day itself isn't marked
   })
 
   test('weekly goals are ignored', () => {
     const stats = streakStats([goal({ frequency: 'weekly' })], new Map(), '2026-10-24')
-    assert.deepEqual(stats, { current: 0, best: 0, streakDays: new Set() })
+    assert.deepEqual(stats, { current: 0, best: 0, streakDays: new Set(), events: [] })
+  })
+
+  test('80% of the day is enough when percentNeeded is 80', () => {
+    const five = ['a', 'b', 'c', 'd', 'e'].map((id) => goal({ id, startDate: '2026-10-20' }))
+    const doneDatesByGoal = new Map(five.map((g) => [g.id, new Set(g.id === 'e' ? [] : ['2026-10-20'])]))
+    assert.equal(streakStats(five, doneDatesByGoal, '2026-10-20').current, 0) // 4 of 5 isn't 100%
+    assert.equal(streakStats(five, doneDatesByGoal, '2026-10-20', { percentNeeded: 80 }).current, 1)
+    // 1 of 2 is only 50%.
+    const two = new Map([['g1', new Set(['2026-10-20'])], ['g2', new Set()]])
+    assert.equal(streakStats(goals, two, '2026-10-21', { percentNeeded: 80 }).best, 0)
+  })
+
+  test('rewards every N streak days, punishment when a streak breaks', () => {
+    const doneDatesByGoal = both('2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-25')
+    // 24th missed (breaks a 4-day run), 26th missed (breaks the 1-day run of the 25th), 27th is today.
+    const { events } = streakStats(goals, doneDatesByGoal, '2026-10-27', { rewardEvery: 2 })
+    assert.deepEqual(events, [
+      { kind: 'reward', date: '2026-10-21' },
+      { kind: 'reward', date: '2026-10-23' },
+      { kind: 'punishment', date: '2026-10-24' },
+      { kind: 'punishment', date: '2026-10-26' },
+    ])
+  })
+})
+
+describe('stakeEvents', () => {
+  const events = [
+    { kind: 'reward', date: '2026-10-21' },
+    { kind: 'punishment', date: '2026-10-24' },
+    { kind: 'reward', date: '2026-10-27' },
+  ]
+
+  test('only events since the stakes were set, newest first', () => {
+    const stakes = { reward: 'Spa day', punishment: 'Skip tea for 7 days', since: '2026-10-22' }
+    assert.deepEqual(stakeEvents(stakes, events), [events[2], events[1]])
+  })
+
+  test('an empty punishment has no events, and no stakes means none at all', () => {
+    assert.deepEqual(stakeEvents({ reward: 'Spa day', punishment: '', since: '2026-10-01' }, events), [events[2], events[0]])
+    assert.deepEqual(stakeEvents(null, events), [])
   })
 })

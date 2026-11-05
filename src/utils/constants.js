@@ -20,3 +20,11 @@ export const STATUS_LABELS = {
   active: 'Active',
   completed: 'Completed',
 }
+
+// One-tap suggestions in the rewards and punishments form. Anything else can be typed.
+export const SAMPLE_REWARDS = ['Eat out', 'Hot chocolate', 'Shopping', 'Spa day']
+
+export const SAMPLE_PUNISHMENTS = ['Skip tea for 7 days', 'Skip Instagram for 7 days', 'Put 500 rupees in piggy bank']
+
+// The group streak counts a day when at least this share of its daily goals is done.
+export const GROUP_PERCENT_NEEDED = 80

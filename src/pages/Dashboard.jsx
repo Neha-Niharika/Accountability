@@ -15,6 +15,7 @@ import {
 } from '../components/Icons'
 import LoadError from '../components/LoadError'
 import MonthView from '../components/MonthView'
+import RewardsView from '../components/RewardsView'
 import TodayGoalItem from '../components/TodayGoalItem'
 import WeekView from '../components/WeekView'
 import { useAuth } from '../hooks/useAuth'
@@ -35,7 +36,7 @@ const ALL = 'All'
 const GROUPS = 'Groups'
 
 // Dashboard tabs. The choice lives in the URL (?view=week) so a refresh keeps it.
-const VIEWS = { today: 'Today', week: 'Week', month: 'Month' }
+const VIEWS = { today: 'Today', week: 'Week', month: 'Month', rewards: 'Rewards' }
 
 const todayFormatter = new Intl.DateTimeFormat(undefined, {
   weekday: 'long',
@@ -260,6 +261,8 @@ function Dashboard() {
         <WeekView uid={user.uid} goals={goals} today={today} />
       ) : view === 'month' ? (
         <MonthView uid={user.uid} goals={goals} today={today} />
+      ) : view === 'rewards' ? (
+        <RewardsView uid={user.uid} goals={goals} today={today} />
       ) : progressLoading ? (
         <p className="page-loading">Loading today’s progress…</p>
       ) : progressError ? (
