@@ -511,6 +511,18 @@ button {
   background: var(--white);
 }
 
+/* The whole row opens the title's link, chevron included. The link's ::after
+   covers the row, so there is still just one link for screen readers. */
+.feed-item-link {
+  position: relative;
+}
+
+.feed-item-link .feed-item-title::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
 .feed-item-done .feed-item-title {
   color: var(--sage-text);
 }

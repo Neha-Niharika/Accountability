@@ -41,7 +41,7 @@ function Groups() {
           ) : (
             <ul className="feed-list">
               {groups.map((group) => (
-                <li key={group.id} className="feed-item">
+                <li key={group.id} className="feed-item feed-item-link">
                   <span className="icon-box" aria-hidden="true">
                     <UsersIcon />
                   </span>
