@@ -1,12 +1,18 @@
 // Dashboard "Week" tab: Monday–Sunday grid for each active goal, yours and your groups'.
+// Tap a day (up to today, within the goal's dates) to mark it done or clear it,
+// for any week: use ◀ to go back and fill in earlier weeks.
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '../hooks/useAuth'
 import { entriesInRange, useGoalEntries } from '../hooks/useGoalEntries'
+import { checkIn, getGroupErrorMessage, memberName, undoCheckIn } from '../services/groupService'
+import { getFirestoreErrorMessage } from '../services/goalService'
+import { markGoalDone, undoGoalDone } from '../services/progressService'
 import { FREQUENCY_LABELS } from '../utils/constants'
 import { addDays, dateKeysBetween, parseDateKey, startOfWeek, toDateKey } from '../utils/dates'
 import { completionPercent } from '../utils/progress'
 import { isGoalInRange, periodStats } from '../utils/stats'
-import { CategoryIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon } from './Icons'
+import { CategoryIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, InfoIcon } from './Icons'
 import LoadError from './LoadError'
 import PeriodHero from './PeriodHero'
 
@@ -25,14 +31,17 @@ function dayState(goal, dateKey, doneDates, todayKey) {
 const STATE_LABELS = { done: 'done', missed: 'missed', open: 'not done yet', off: 'not due' }
 
 function WeekView({ uid, goals, today }) {
+  const { user } = useAuth()
   const [weekOffset, setWeekOffset] = useState(0) // 0 = this week, -1 = last week…
+  const [busyCellId, setBusyCellId] = useState(null)
+  const [actionError, setActionError] = useState('')
   const todayKey = toDateKey(today)
   const monday = addDays(startOfWeek(today), weekOffset * 7)
   const fromKey = toDateKey(monday)
   const toKey = toDateKey(addDays(monday, 6))
   const days = dateKeysBetween(fromKey, toKey)
 
-  const { entries: allEntries, loading, error, groupsError } = useGoalEntries(uid, goals, fromKey, toKey)
+  const { entries: allEntries, setEntryDone, loading, error, groupsError } = useGoalEntries(uid, goals, fromKey, toKey)
   const entries = entriesInRange(allEntries, fromKey, toKey)
 
   const statsByGoal = new Map(
@@ -41,6 +50,32 @@ function WeekView({ uid, goals, today }) {
   const totalDue = [...statsByGoal.values()].reduce((sum, stats) => sum + stats.due, 0)
   const totalDone = [...statsByGoal.values()].reduce((sum, stats) => sum + stats.done, 0)
   const rangeLabel = `${dayMonthFormatter.format(monday)} – ${dayMonthFormatter.format(addDays(monday, 6))}`
+
+  function isEditable(goal, dateKey) {
+    return dateKey <= todayKey && isGoalInRange(goal, dateKey, dateKey)
+  }
+
+  // Mark or clear one day: a personal goal's progress, or your own group check-in.
+  async function handleToggleDay(entry, dateKey, done) {
+    const { goal, group } = entry
+    setActionError('')
+    setBusyCellId(`${entry.key}_${dateKey}`)
+    try {
+      if (group) {
+        if (done) await checkIn(group.id, goal.id, dateKey, { id: uid, name: memberName(user) }, '')
+        else await undoCheckIn(group.id, goal.id, dateKey, uid)
+      } else if (done) {
+        await markGoalDone(uid, goal.id, dateKey)
+      } else {
+        await undoGoalDone(uid, goal.id, dateKey)
+      }
+      setEntryDone(entry, dateKey, done)
+    } catch (firestoreError) {
+      setActionError(group ? getGroupErrorMessage(firestoreError) : getFirestoreErrorMessage(firestoreError))
+    } finally {
+      setBusyCellId(null)
+    }
+  }
 
   return (
     <div className="dashboard-grid">
@@ -87,12 +122,19 @@ function WeekView({ uid, goals, today }) {
           />
 
           <div className="dashboard-feed">
+            <p className="info-box week-fill-hint">
+              <InfoIcon size={20} />
+              <span>Tap a day to mark it done or clear it. Use ◀ to go back to earlier weeks.</span>
+            </p>
+            {actionError && <p className="status status-error page-status">{actionError}</p>}
+
             <h2 className="section-title">Goals this week</h2>
             {entries.length === 0 ? (
               <p className="muted">No active goals in this week.</p>
             ) : (
               <ul className="feed-list">
-                {entries.map(({ key, goal, doneDates, to, label }) => {
+                {entries.map((entry) => {
+                  const { key, goal, doneDates, to, label } = entry
                   const stats = statsByGoal.get(key)
                   return (
                     <li key={key} className="feed-item period-item">
@@ -112,13 +154,36 @@ function WeekView({ uid, goals, today }) {
                           {days.map((dateKey) => {
                             const state = dayState(goal, dateKey, doneDates, todayKey)
                             const date = parseDateKey(dateKey)
+                            const weekday = weekdayFormatter.format(date)
+
+                            if (isEditable(goal, dateKey)) {
+                              const done = state === 'done'
+                              const day = longDayFormatter.format(date)
+                              const action = `${done ? 'Clear' : 'Mark'} ${goal.title} ${done ? 'for' : 'done for'} ${day}`
+                              return (
+                                <li key={dateKey}>
+                                  <button
+                                    type="button"
+                                    className={`day-cell day-cell-${state} day-cell-button`}
+                                    onClick={() => handleToggleDay(entry, dateKey, !done)}
+                                    disabled={busyCellId === `${key}_${dateKey}`}
+                                    aria-pressed={done}
+                                    aria-label={action}
+                                    title={action}
+                                  >
+                                    {done ? <CheckIcon size={14} /> : weekday}
+                                  </button>
+                                </li>
+                              )
+                            }
+
                             return (
                               <li
                                 key={dateKey}
                                 className={`day-cell day-cell-${state}`}
                                 title={`${longDayFormatter.format(date)}: ${STATE_LABELS[state]}`}
                               >
-                                {state === 'done' ? <CheckIcon size={14} /> : weekdayFormatter.format(date)}
+                                {state === 'done' ? <CheckIcon size={14} /> : weekday}
                                 <span className="visually-hidden">
                                   {`${longDayFormatter.format(date)}: ${STATE_LABELS[state]}`}
                                 </span>

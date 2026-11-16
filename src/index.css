@@ -2083,6 +2083,11 @@ button {
   cursor: pointer;
 }
 
+.week-row .day-cell-button.day-cell-missed,
+.week-row .day-cell-button.day-cell-open {
+  background: transparent;
+}
+
 .day-cell-button.day-cell-done {
   border-style: solid;
   border-color: var(--charcoal);
