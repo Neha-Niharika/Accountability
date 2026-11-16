@@ -130,3 +130,49 @@ export function stakeEvents(stakes, events) {
   if (!stakes) return []
   return events.filter((event) => event.date >= stakes.since && stakes[event.kind]).reverse()
 }
+
+// One goal's own streak, counted from its start date up to today. Daily goals
+// count days in a row done; weekly goals count Monday–Sunday weeks in a row
+// with at least one record. The day or week still in progress never breaks a
+// streak: it only adds to it once it's done.
+// Returns { current, best, unit, doneNow }: `doneNow` says whether today (or
+// this week, for weekly goals) is already done.
+export function goalStreak(goal, doneDates, todayKey) {
+  if (goal.frequency !== 'weekly') {
+    const { current, best } = streakStats([goal], new Map([[goal.id, doneDates]]), todayKey)
+    return { current, best, unit: 'day', doneNow: doneDates.has(todayKey) }
+  }
+
+  const range = trackableRange(goal, goal.startDate, todayKey, todayKey)
+  let run = 0
+  let best = 0
+  let doneNow = false
+  if (range) {
+    for (let monday = startOfWeek(parseDateKey(range.start)); toDateKey(monday) <= range.end; monday = addDays(monday, 7)) {
+      const weekStart = toDateKey(monday)
+      const weekEnd = toDateKey(addDays(monday, 6))
+      const done = [...doneDates].some((date) => date >= weekStart && date <= weekEnd)
+      const inProgress = weekEnd >= todayKey
+      if (inProgress) doneNow = done
+      if (done) {
+        run += 1
+        best = Math.max(best, run)
+      } else if (!inProgress) {
+        run = 0
+      }
+    }
+  }
+  return { current: run, best, unit: 'week', doneNow }
+}
+
+// Streak lengths worth celebrating, so there's always a next one to aim for.
+const MILESTONES = { day: [3, 7, 14, 21, 30, 50, 75, 100, 150, 200, 365], week: [2, 4, 8, 12, 26, 52] }
+
+// The next milestone above `current`; past the last one, every further 365 days or 52 weeks.
+export function nextMilestone(current, unit) {
+  const steps = MILESTONES[unit]
+  const next = steps.find((step) => step > current)
+  if (next) return next
+  const every = steps[steps.length - 1]
+  return (Math.floor(current / every) + 1) * every
+}

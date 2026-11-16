@@ -560,6 +560,25 @@ button {
   color: var(--sage-text);
 }
 
+/* A goal's streak on the Week tab. Red while a streak is running. */
+.goal-streak {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--space-1, 4px);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sage-text);
+}
+
+.goal-streak-active {
+  color: var(--red);
+}
+
+.goal-streak svg {
+  flex: none;
+}
+
 /* Round check button. Turns red on hover, because it is an action. */
 .check-button {
   flex-shrink: 0;

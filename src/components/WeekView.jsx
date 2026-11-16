@@ -1,6 +1,7 @@
 // Dashboard "Week" tab: Monday–Sunday grid for each active goal, yours and your groups'.
 // Tap a day (up to today, within the goal's dates) to mark it done or clear it,
-// for any week: use ◀ to go back and fill in earlier weeks.
+// for any week: use ◀ to go back and fill in earlier weeks. Each goal shows its
+// own streak and the next milestone to aim for.
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
@@ -11,8 +12,8 @@ import { markGoalDone, undoGoalDone } from '../services/progressService'
 import { FREQUENCY_LABELS } from '../utils/constants'
 import { addDays, dateKeysBetween, parseDateKey, startOfWeek, toDateKey } from '../utils/dates'
 import { completionPercent } from '../utils/progress'
-import { isGoalInRange, periodStats } from '../utils/stats'
-import { CategoryIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, InfoIcon } from './Icons'
+import { goalStreak, isGoalInRange, nextMilestone, periodStats } from '../utils/stats'
+import { CategoryIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, FlameIcon, InfoIcon } from './Icons'
 import LoadError from './LoadError'
 import PeriodHero from './PeriodHero'
 
@@ -30,6 +31,28 @@ function dayState(goal, dateKey, doneDates, todayKey) {
 
 const STATE_LABELS = { done: 'done', missed: 'missed', open: 'not done yet', off: 'not due' }
 
+// Streaks run back to each goal's start, so load every date once. Moving
+// between weeks then needs no reload.
+const FIRST_KEY = '0000-01-01'
+const LAST_KEY = '9999-12-31'
+
+function count(n, unit) {
+  return `${n} ${unit}${n === 1 ? '' : 's'}`
+}
+
+// The line under a goal: its streak and what to do next to grow it.
+function streakText(goal, streak, todayKey) {
+  const { current, best, unit, doneNow } = streak
+  const now = unit === 'day' ? 'today' : 'this week'
+  const bestPart = best > current ? ` · best ${count(best, unit)}` : ''
+
+  if (goal.endDate && goal.endDate < todayKey) return best > 0 ? `Best streak: ${count(best, unit)}` : 'No streak'
+  if (current === 0) return `No streak yet · do it ${now} to start one${bestPart}`
+  if (!doneNow) return `${current}-${unit} streak · do it ${now} to make it ${current + 1}${bestPart}`
+  const target = nextMilestone(current, unit)
+  return `${current}-${unit} streak · ${count(target - current, unit)} more to reach ${target}${bestPart}`
+}
+
 function WeekView({ uid, goals, today }) {
   const { user } = useAuth()
   const [weekOffset, setWeekOffset] = useState(0) // 0 = this week, -1 = last week…
@@ -41,7 +64,7 @@ function WeekView({ uid, goals, today }) {
   const toKey = toDateKey(addDays(monday, 6))
   const days = dateKeysBetween(fromKey, toKey)
 
-  const { entries: allEntries, setEntryDone, loading, error, groupsError } = useGoalEntries(uid, goals, fromKey, toKey)
+  const { entries: allEntries, setEntryDone, loading, error, groupsError } = useGoalEntries(uid, goals, FIRST_KEY, LAST_KEY)
   const entries = entriesInRange(allEntries, fromKey, toKey)
 
   const statsByGoal = new Map(
@@ -136,6 +159,7 @@ function WeekView({ uid, goals, today }) {
                 {entries.map((entry) => {
                   const { key, goal, doneDates, to, label } = entry
                   const stats = statsByGoal.get(key)
+                  const streak = goalStreak(goal, doneDates, todayKey)
                   return (
                     <li key={key} className="feed-item period-item">
                       <span className="icon-box" aria-hidden="true">
@@ -149,6 +173,10 @@ function WeekView({ uid, goals, today }) {
                           {label && `${label} · `}
                           {FREQUENCY_LABELS[goal.frequency]} · {stats.done}/{stats.due} ·{' '}
                           {completionPercent(stats.done, stats.due)}%
+                        </span>
+                        <span className={`goal-streak${streak.current > 0 ? ' goal-streak-active' : ''}`}>
+                          <FlameIcon size={14} />
+                          {streakText(goal, streak, todayKey)}
                         </span>
                         <ol className="week-row" aria-label={`${goal.title}, this week`}>
                           {days.map((dateKey) => {

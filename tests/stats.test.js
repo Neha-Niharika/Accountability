@@ -2,7 +2,17 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import { addDays, dateKeysBetween, endOfMonth, startOfWeek, toDateKey } from '../src/utils/dates.js'
-import { dayCompletion, isGoalInRange, periodStats, shadeLevel, sinceStartStats, stakeEvents, streakStats } from '../src/utils/stats.js'
+import {
+  dayCompletion,
+  goalStreak,
+  isGoalInRange,
+  nextMilestone,
+  periodStats,
+  shadeLevel,
+  sinceStartStats,
+  stakeEvents,
+  streakStats,
+} from '../src/utils/stats.js'
 
 function goal(overrides = {}) {
   return { id: 'g1', frequency: 'daily', startDate: '2026-10-01', endDate: null, status: 'active', ...overrides }
@@ -170,5 +180,39 @@ describe('stakeEvents', () => {
   test('an empty punishment has no events, and no stakes means none at all', () => {
     assert.deepEqual(stakeEvents({ reward: 'Spa day', punishment: '', since: '2026-10-01' }, events), [events[2], events[0]])
     assert.deepEqual(stakeEvents(null, events), [])
+  })
+})
+
+describe('goalStreak', () => {
+  test('daily: counts days in a row, an unfinished today does not break it', () => {
+    const dates = new Set(['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-05', '2026-10-06'])
+    assert.deepEqual(goalStreak(goal(), dates, '2026-10-07'), { current: 2, best: 3, unit: 'day', doneNow: false })
+    dates.add('2026-10-07')
+    assert.deepEqual(goalStreak(goal(), dates, '2026-10-07'), { current: 3, best: 3, unit: 'day', doneNow: true })
+  })
+
+  test('daily: a missed yesterday resets the current streak', () => {
+    const dates = new Set(['2026-10-01', '2026-10-02'])
+    assert.equal(goalStreak(goal(), dates, '2026-10-04').current, 0)
+    assert.equal(goalStreak(goal(), dates, '2026-10-04').best, 2)
+  })
+
+  test('weekly: counts weeks in a row, this week still open', () => {
+    // Weeks starting 28 Sep, 5 Oct, 12 Oct done; 19 Oct (this week) not yet.
+    const weekly = goal({ frequency: 'weekly' })
+    const dates = new Set(['2026-10-01', '2026-10-07', '2026-10-18'])
+    assert.deepEqual(goalStreak(weekly, dates, '2026-10-21'), { current: 3, best: 3, unit: 'week', doneNow: false })
+    // Week of 19 Oct missed, now in the week of 26 Oct.
+    assert.equal(goalStreak(weekly, dates, '2026-10-27').current, 0)
+  })
+})
+
+describe('nextMilestone', () => {
+  test('the next step up, then every 365 days or 52 weeks', () => {
+    assert.equal(nextMilestone(0, 'day'), 3)
+    assert.equal(nextMilestone(3, 'day'), 7)
+    assert.equal(nextMilestone(365, 'day'), 730)
+    assert.equal(nextMilestone(1, 'week'), 2)
+    assert.equal(nextMilestone(60, 'week'), 104)
   })
 })
